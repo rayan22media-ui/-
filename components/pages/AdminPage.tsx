@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useMemo } from 'react';
 import { User, Report, Listing, BlogPost, PageContent, PageBlock, AdminAction } from '../../types';
 import { BLOG_CATEGORIES } from '../../constants';
@@ -32,6 +33,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12 flex flex-col md:flex-row gap-8 items-start">
             <AdminSidebar currentView={currentView} setCurrentView={setCurrentView} />
             <div className="flex-grow w-full min-w-0">
+                {/* FIX: Pass the 'setCurrentView' prop to the DashboardView component. */}
                 {currentView === 'dashboard' && <DashboardView {...props} setCurrentView={setCurrentView} />}
                 {currentView === 'users' && <UsersManagerView {...props} />}
                 {currentView === 'listings' && <ListingsManagerView {...props} />}
@@ -89,7 +91,6 @@ const DashboardView: React.FC<AdminPageProps & { setCurrentView: (view: AdminVie
             acc[l.category] = (acc[l.category] || 0) + 1;
             return acc;
         }, {} as Record<string, number>);
-        // FIX: Explicitly type the sort callback arguments to prevent type inference issues.
         return Object.entries(counts).sort((a: [string, number], b: [string, number]) => b[1] - a[1]);
     }, [listings]);
 
