@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { PageBlock } from '../../types';
-import { RichTextEditor } from '../pages/AdminPage';
+import RichTextEditor from '../RichTextEditor';
 
 // --- General Editor Components ---
 const inputStyle = "w-full py-2 px-3 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-slate-800 placeholder:text-slate-400";
