@@ -1,0 +1,7 @@
+{
+  "name": "نسخة احتياطية تطبيق المقايضة",
+  "description": "A web application that allows users in Syria to post items they want to barter and find items from others. It supports all Syrian governorates and provides a platform for direct communication between users.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

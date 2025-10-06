@@ -1,0 +1,59 @@
+import React from 'react';
+import { PageBlock, Listing, BlogPost, User, Page } from '../../types';
+import { HeroWidget, TextWidget, ImageWidget, BannerWidget, SliderWidget, ListingsWidget, BlogPostsWidget } from './widgets';
+
+interface WidgetRendererProps {
+  block: PageBlock;
+  listings?: Listing[];
+  blogPosts?: BlogPost[];
+  users?: User[];
+  categories?: string[];
+  onSelectListing?: (listing: Listing) => void;
+  onPostSelect?: (postId: number) => void;
+  onNavigate?: (page: Page, params?: any) => void;
+}
+
+const WidgetRenderer: React.FC<WidgetRendererProps> = ({ block, listings, blogPosts, users, onSelectListing, onPostSelect, onNavigate }) => {
+  switch (block.type) {
+    case 'hero':
+      return <HeroWidget title={block.props.title} subtitle={block.props.subtitle} imageUrl={block.props.imageUrl} />;
+    case 'text':
+      return <TextWidget content={block.props.content} />;
+    case 'image':
+      return <ImageWidget src={block.props.src} alt={block.props.alt} />;
+    case 'banner':
+      return <BannerWidget src={block.props.src} alt={block.props.alt} />;
+    case 'slider':
+      return <SliderWidget slides={block.props.slides} />;
+    case 'listings':
+      if (!listings || !onSelectListing || !onNavigate) return null;
+      return <ListingsWidget
+                title={block.props.title}
+                limit={block.props.limit}
+                category={block.props.category}
+                layout={block.props.layout}
+                listings={listings}
+                onSelectListing={onSelectListing}
+                onNavigate={onNavigate}
+             />;
+    case 'blogPosts':
+      if (!blogPosts || !users || !onPostSelect || !onNavigate) return null;
+      return <BlogPostsWidget
+                title={block.props.title}
+                limit={block.props.limit}
+                blogPosts={blogPosts}
+                users={users}
+                onPostSelect={onPostSelect}
+                onNavigate={onNavigate}
+            />;
+    default:
+      console.warn(`Unknown block type: ${block.type}`);
+      return (
+        <div className="container mx-auto p-4 my-4 bg-red-100 border border-red-500 text-red-700 rounded-lg">
+          مكعب غير معروف: "{block.type}"
+        </div>
+      );
+  }
+};
+
+export default WidgetRenderer;
