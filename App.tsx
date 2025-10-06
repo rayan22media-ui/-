@@ -4,6 +4,7 @@ import { MOCK_USERS_DATA, MOCK_LISTINGS_DATA, MOCK_MESSAGES_DATA, MOCK_REPORTS_D
 import { ToastProvider, useToast } from './components/Toast';
 
 import Header from './components/Header';
+import HomePage from './components/pages/HomePage';
 import LoginPage from './components/pages/LoginPage';
 import ProfilePage from './components/pages/ProfilePage';
 import AddListingPage from './components/pages/AddListingPage';
@@ -394,29 +395,22 @@ function AppContent() {
     const selectedPost = selectedPostId ? blogPosts.find(p => p.id === selectedPostId) : null;
     const author = selectedPost ? users.find(u => u.id === selectedPost.authorId) : null;
     const selectedCustomPage = selectedPageSlug ? pages.find(p => p.slug === selectedPageSlug && p.status === 'published') : null;
-    const homePage = pages.find(p => p.slug === 'home' && p.status === 'published');
     const selectedListingData = selectedListingId ? listings.find(l => l.id === selectedListingId) : null;
 
-    const renderHomePage = () => {
-        return homePage
-            ? <ContentPage
-                page={homePage}
-                listings={listings}
-                blogPosts={blogPosts}
-                users={users}
-                categories={categories}
-                onSelectListing={handleSelectListing}
-                onPostSelect={(id) => handleNavigate(Page.BlogPost, { postId: id })}
-                onNavigate={handleNavigate}
-              />
-            : <div className="text-center p-20">Homepage content not found. Please configure a page with the slug 'home' in the admin panel.</div>;
-    };
+    const mainHomePage = <HomePage
+        listings={listings}
+        blogPosts={blogPosts}
+        onSelectListing={handleSelectListing}
+        onPostSelect={(id) => handleNavigate(Page.BlogPost, { postId: id })}
+        onNavigate={handleNavigate}
+        categories={categories}
+    />;
     
     const loginPage = <LoginPage onLogin={handleLogin} onRegister={handleRegister} onNavigateToHome={() => handleNavigate(Page.Home)} />;
 
     switch (currentPage) {
       case Page.Home:
-        return renderHomePage();
+        return mainHomePage;
       case Page.Login:
         return loginPage;
       case Page.Profile:
@@ -426,7 +420,7 @@ function AppContent() {
       case Page.Messages:
         return currentUser ? <MessagesPage messages={messages} currentUser={currentUser} listings={listings} users={users} activeConversation={activeConversation} onSendMessage={handleSendMessage} onStartConversation={handleStartConversation} onBackToInbox={handleBackToInbox} /> : loginPage;
       case Page.Admin:
-         return currentUser?.role === 'admin' ? <AdminPage users={users} listings={listings} reports={reports} blogPosts={blogPosts} pages={pages} categories={categories} siteSettings={siteSettings} onAdminAction={handleAdminAction} onSelectListing={handleSelectListing} /> : renderHomePage();
+         return currentUser?.role === 'admin' ? <AdminPage users={users} listings={listings} reports={reports} blogPosts={blogPosts} pages={pages} categories={categories} siteSettings={siteSettings} onAdminAction={handleAdminAction} onSelectListing={handleSelectListing} /> : mainHomePage;
       case Page.Listings:
         return <ListingsPage listings={listings} onSelectListing={handleSelectListing} categories={categories} />;
       case Page.Blog:
@@ -434,11 +428,11 @@ function AppContent() {
       case Page.BlogPost:
         return selectedPost && author ? <BlogPostPage post={selectedPost} author={author} /> : <BlogListPage posts={blogPosts} users={users} onPostSelect={(id) => handleNavigate(Page.BlogPost, { postId: id })} />;
       case Page.ContentPage:
-        return selectedCustomPage ? <ContentPage page={selectedCustomPage} onNavigate={handleNavigate} /> : renderHomePage();
+        return selectedCustomPage ? <ContentPage page={selectedCustomPage} onNavigate={handleNavigate} /> : mainHomePage;
       case Page.ListingDetail:
-        return selectedListingData ? <ListingDetailPage listing={selectedListingData} allListings={listings} currentUser={currentUser} onBack={() => window.history.back()} onStartConversation={handleStartConversation} onReportListing={handleReportListing} onSelectUserListing={handleSelectListing} onUpdateStatus={handleUpdateUserListingStatus} onUpdateListing={handleUpdateListing} categories={categories} /> : renderHomePage();
+        return selectedListingData ? <ListingDetailPage listing={selectedListingData} allListings={listings} currentUser={currentUser} onBack={() => window.history.back()} onStartConversation={handleStartConversation} onReportListing={handleReportListing} onSelectUserListing={handleSelectListing} onUpdateStatus={handleUpdateUserListingStatus} onUpdateListing={handleUpdateListing} categories={categories} /> : mainHomePage;
       default:
-        return renderHomePage();
+        return mainHomePage;
     }
   };
 
