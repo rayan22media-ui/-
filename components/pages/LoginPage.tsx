@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RegistrationData } from '../../App';
+import { RegistrationData } from '../../types';
 import { GOVERNORATES } from '../../constants';
 import { useToast } from '../Toast';
 

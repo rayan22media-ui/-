@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Page, User, Listing, Message, Report, BlogPost, PageContent, AdminAction } from './types';
+import { Page, User, Listing, Message, Report, BlogPost, PageContent, AdminAction, RegistrationData } from './types';
 import { MOCK_USERS_DATA, MOCK_LISTINGS_DATA, MOCK_MESSAGES_DATA, MOCK_REPORTS_DATA, MOCK_BLOG_POSTS_DATA, MOCK_PAGES_DATA, INITIAL_CATEGORIES } from './constants';
 import { ToastProvider, useToast } from './components/Toast';
 
@@ -54,7 +54,7 @@ function useStickyState<T>(defaultValue: T, key: string): [T, React.Dispatch<Rea
   return [value, setValue];
 }
 
-export type RegistrationData = Omit<User, 'id' | 'role' | 'status'>;
+
 
 
 function AppContent() {

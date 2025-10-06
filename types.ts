@@ -10,6 +10,10 @@ export interface User {
   status: 'active' | 'banned';
 }
 
+// Moved from App.tsx to break circular dependency
+export type RegistrationData = Omit<User, 'id' | 'role' | 'status'>;
+
+
 export interface Listing {
   id: number;
   user: User;
