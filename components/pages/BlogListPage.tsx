@@ -12,7 +12,7 @@ const BlogListPage: React.FC<BlogListPageProps> = ({ posts, users, onPostSelect 
         <div className="bg-slate-50 min-h-screen">
             <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 <div className="text-center mb-12">
-                    <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-800">مدونة وين</h1>
+                    <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-800">مدونة </h1>
                     <p className="mt-4 text-lg text-slate-600 max-w-2xl mx-auto">نصائح، أخبار، وقصص نجاح لمساعدتك في الحصول على أفضل تجربة مقايضة.</p>
                 </div>
 
