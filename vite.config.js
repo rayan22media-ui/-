@@ -4,6 +4,10 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    // Vite replaces this with the actual value at build time.
+    'process.env.API_KEY': JSON.stringify(process.env.API_KEY)
+  },
   build: {
     chunkSizeWarningLimit: 1500, // Increase the limit to 1500 kB
     rollupOptions: {
