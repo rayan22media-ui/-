@@ -31,7 +31,7 @@ const Logo: React.FC<{ onClick: () => void; logoUrl: string }> = ({ onClick, log
 
 const Header: React.FC<HeaderProps> = ({ currentUser, pages, onNavigate, onLogout, isMobileMenuOpen, toggleMobileMenu, isScrolled, logoUrl, unreadMessagesCount }) => {
     
-    const publishedPages = pages.filter(p => p.status === 'published' && p.slug !== 'home');
+    const publishedPages = (pages || []).filter(p => p.status === 'published' && p.slug !== 'home');
     
     return (
         <>

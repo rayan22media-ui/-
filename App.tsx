@@ -24,9 +24,13 @@ interface SiteSettings {
 }
 
 
-// Custom hook for state persistence in localStorage
+// Custom hook for state persistence in localStorage, safe for SSR/build environments like Vercel
 function useStickyState<T>(defaultValue: T, key: string): [T, React.Dispatch<React.SetStateAction<T>>] {
   const [value, setValue] = useState<T>(() => {
+    // Check if we are in a browser environment before accessing localStorage
+    if (typeof window === 'undefined') {
+      return defaultValue;
+    }
     try {
         const stickyValue = window.localStorage.getItem(key);
         if (stickyValue !== null) {
@@ -41,13 +45,13 @@ function useStickyState<T>(defaultValue: T, key: string): [T, React.Dispatch<Rea
         }
     } catch (error) {
         console.error("Failed to parse sticky state from localStorage for key:", key, error);
-        // If parsing fails, clear the corrupted item and fall back to default
-        window.localStorage.removeItem(key);
+        // If parsing fails, fall back to default
     }
     return defaultValue;
   });
 
   useEffect(() => {
+    // This effect only runs on the client where localStorage is available
     window.localStorage.setItem(key, JSON.stringify(value));
   }, [key, value]);
 
