@@ -6,7 +6,8 @@ export default defineConfig({
   plugins: [react()],
   define: {
     // Vite replaces this with the actual value at build time.
-    'process.env.API_KEY': JSON.stringify(process.env.API_KEY)
+    // Per Vite convention, client-exposed env vars should be prefixed with VITE_.
+    'process.env.API_KEY': JSON.stringify(process.env.VITE_API_KEY)
   },
   build: {
     chunkSizeWarningLimit: 1500, // Increase the limit to 1500 kB
