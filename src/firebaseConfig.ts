@@ -3,22 +3,20 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-import { getAnalytics } from "firebase/analytics";
 
-// Your web app's Firebase configuration
+// Your web app's Firebase configuration is now loaded from environment variables
 const firebaseConfig = {
-  apiKey: "AIzaSyCF26ozSFFHs5hzymzCVIZ5c4Hn5l5KSL4",
-  authDomain: "wino-17628.firebaseapp.com",
-  projectId: "wino-17628",
-  storageBucket: "wino-17628.appspot.com",
-  messagingSenderId: "759405345321",
-  appId: "1:759405345321:web:256de3250b6f7a5ee17a38",
-  measurementId: "G-4LHQ702W68"
+  apiKey: process.env.FIREBASE_API_KEY,
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.FIREBASE_APP_ID,
+  measurementId: process.env.FIREBASE_MEASUREMENT_ID
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
 
 // Export the services you need
 // FIX: Call getAuth directly.
