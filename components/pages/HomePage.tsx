@@ -13,20 +13,27 @@ interface HomePageProps {
 }
 
 const Hero: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="bg-white">
-    <div className="container mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-8 text-center">
-      <h1 className="text-4xl md:text-5xl font-extrabold text-slate-800 bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-indigo-600">
-        قايض ما لا تحتاج بما تحتاجه
-      </h1>
-      <p className="mt-4 text-lg text-slate-600 max-w-2xl mx-auto">
-        "وين للمقايضة" هي منصتك الأولى في سوريا لتبادل الأغراض بكل سهولة وأمان.
-      </p>
-      <div className="mt-8 max-w-3xl mx-auto">
-        {children}
-      </div>
+    <div className="relative isolate pt-24 pb-16 sm:pt-32 sm:pb-24">
+        {/* Background Gradient & Shapes */}
+        <div className="absolute inset-0 -z-10 h-full w-full bg-slate-100 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:36px_36px]"></div>
+        <div className="absolute inset-x-0 top-1/2 -z-10 -translate-y-1/2 transform-gpu overflow-hidden opacity-30 blur-3xl" aria-hidden="true">
+            <div className="relative left-[calc(50%-11rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[30deg] bg-gradient-to-tr from-[#a855f7] to-[#6366f1] sm:left-[calc(50%-30rem)] sm:w-[72.1875rem]" style={{ clipPath: 'polygon(74.1% 44.1%, 100% 61.6%, 97.5% 26.9%, 85.5% 0.1%, 80.7% 2%, 72.5% 32.5%, 60.2% 62.4%, 52.4% 68.1%, 47.5% 58.3%, 45.2% 34.5%, 27.5% 76.7%, 0.1% 64.9%, 17.9% 100%, 27.6% 76.8%, 76.1% 97.7%, 74.1% 44.1%)' }}></div>
+        </div>
+
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-slate-800 tracking-tight">
+                قايض ما لا تحتاج بما <span className="bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-indigo-600">تحتاجه</span>
+            </h1>
+            <p className="mt-6 text-lg text-slate-600 max-w-2xl mx-auto">
+                "وين للمقايضة" هي منصتك الأولى في سوريا لتبادل الأغراض بكل سهولة وأمان.
+            </p>
+            <div className="mt-10 flex justify-center">
+                {children}
+            </div>
+        </div>
     </div>
-  </div>
 );
+
 
 const SectionHeader: React.FC<{ title: string; onViewAll?: () => void }> = ({ title, onViewAll }) => (
     <div className="flex justify-between items-center mb-8">
