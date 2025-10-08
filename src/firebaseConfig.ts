@@ -1,7 +1,9 @@
+// src/firebaseConfig.ts
+
 
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 // Declare the global variable that Vite will inject.
@@ -56,6 +58,17 @@ if (missingVars.length > 0) {
       auth = getAuth(app);
       db = getFirestore(app);
       storage = getStorage(app);
+      
+      // Enable offline persistence for a smoother experience.
+      enableIndexedDbPersistence(db)
+        .catch((err) => {
+          if (err.code == 'failed-precondition') {
+            console.warn("Firebase persistence couldn't be enabled. This is likely because you have multiple tabs open. The app will still work online.");
+          } else if (err.code == 'unimplemented') {
+            console.warn("Firebase persistence couldn't be enabled as your browser doesn't support it. The app will still work online.");
+          }
+        });
+        
       firebaseInitializationSuccess = true;
     } catch (error) {
       console.error("Firebase Initialization Failed: An error occurred during Firebase setup. This could be due to incorrect configuration values or network issues.", error);

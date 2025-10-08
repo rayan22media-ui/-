@@ -130,6 +130,8 @@ function AppContent() {
       console.error("Failed to fetch data from Firebase:", error);
       if (error.message === 'FIREBASE_NOT_INITIALIZED') {
           addToast('error', 'فشل تهيئة Firebase', 'لا يمكن الاتصال بالخادم. يرجى التحقق من إعدادات Firebase الخاصة بك.');
+      } else if ((error as any).code === 'unavailable') {
+          addToast('warning', 'أنت غير متصل بالإنترنت', 'يتم عرض البيانات المحفوظة. قد لا تكون بعض الميزات متاحة.');
       } else {
           addToast('error', 'خطأ في الاتصال', 'لم نتمكن من جلب البيانات من الخادم.');
       }
@@ -160,7 +162,9 @@ function AppContent() {
 
     } catch (error: any) {
       console.error("Failed to fetch public data from Firebase:", error);
-      if ((error as any).code === 'permission-denied') {
+      if ((error as any).code === 'unavailable') {
+        addToast('warning', 'أنت غير متصل بالإنترنت', 'يتم عرض البيانات المحفوظة حالياً.');
+      } else if ((error as any).code === 'permission-denied') {
           addToast('error', 'خطأ في الأذونات', 'فشل تحميل البيانات العامة. قد تكون هناك مشكلة في إعدادات الخادم.');
       } else {
           addToast('error', 'خطأ في الاتصال', 'لم نتمكن من جلب البيانات العامة من الخادم.');
