@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Page, User, Listing, Message, Report, BlogPost, PageContent, AdminAction, RegistrationData, ListingData, SiteSettings } from './types';
 import { ToastProvider, useToast } from './components/Toast';
 import { api } from './services/api';
-import { auth } from './src/firebaseConfig'; // Import auth for onAuthStateChanged
+import { auth, firebaseInitializationSuccess } from './src/firebaseConfig'; // Import auth and the new flag
 
 import Header from './components/Header';
 import HomePage from './components/pages/HomePage';
@@ -45,6 +45,25 @@ function useStickyState<T>(defaultValue: T, key: string): [T, React.Dispatch<Rea
 
   return [value, setValue];
 }
+
+const FirebaseErrorOverlay = () => (
+  <div className="fixed inset-0 bg-slate-900/80 z-[100] flex items-center justify-center p-4 text-center">
+    <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-lg w-full">
+        <div className="w-16 h-16 mx-auto bg-red-100 rounded-full flex items-center justify-center mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+        </div>
+        <h1 className="text-2xl font-bold text-slate-800 mb-2">فشل في تهيئة التطبيق</h1>
+        <p className="text-slate-600">
+            تعذر الاتصال بالخدمات الأساسية، ولا يمكن تشغيل التطبيق حاليًا.
+            <br/><br/>
+            <strong className="font-semibold">للمطورين:</strong> يرجى التحقق من أن متغيرات البيئة الخاصة بـ Firebase (<code>VITE_FIREBASE_...</code>) في ملف <code>.env</code> صحيحة.
+        </p>
+    </div>
+  </div>
+);
+
 
 function AppContent() {
   const [currentPage, setCurrentPage] = useStickyState<Page>(Page.Home, 'currentPage');
@@ -92,15 +111,25 @@ function AppContent() {
       setPages(data.pages);
       setCategories(data.categories);
       setSiteSettings(data.siteSettings);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch data from Firebase:", error);
-      addToast('error', 'خطأ في الاتصال', 'لم نتمكن من جلب البيانات من الخادم.');
+      if (error.message === 'FIREBASE_NOT_INITIALIZED') {
+          addToast('error', 'فشل تهيئة Firebase', 'لا يمكن الاتصال بالخادم. يرجى التحقق من إعدادات Firebase الخاصة بك.');
+      } else {
+          addToast('error', 'خطأ في الاتصال', 'لم نتمكن من جلب البيانات من الخادم.');
+      }
     }
     // Final loading state is handled by the auth effect
   };
   
   // This effect runs once on mount to check authentication state.
   useEffect(() => {
+    // If initialization failed, do nothing. The overlay is already showing.
+    if (!firebaseInitializationSuccess) {
+        setIsLoading(false); // Ensure loading spinner doesn't run forever
+        return;
+    }
+
     // Only subscribe if auth was initialized successfully
     if (auth) {
       const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
@@ -108,7 +137,15 @@ function AppContent() {
           if (firebaseUser) {
               // User is signed in, fetch their profile data
               const userProfile = await api.getUserProfile(firebaseUser.uid);
-              setCurrentUser(userProfile);
+              if (userProfile?.status === 'active') {
+                setCurrentUser(userProfile);
+              } else {
+                 // If user is found but not active (e.g., banned), log them out from the session.
+                 if (userProfile) {
+                    await api.logout();
+                 }
+                 setCurrentUser(null);
+              }
           } else {
               // User is signed out
               setCurrentUser(null);
@@ -120,8 +157,7 @@ function AppContent() {
 
       return () => unsubscribe(); // Cleanup subscription on unmount
     } else {
-      // If Firebase Auth is not available, we can't check for a logged-in user.
-      // We'll proceed without a user and just fetch public data.
+      // This case is unlikely if firebaseInitializationSuccess is true, but acts as a safeguard.
       const loadWithoutAuth = async () => {
           setIsLoading(true);
           await fetchData();
@@ -186,18 +222,24 @@ function AppContent() {
   const handleLogin = async (email: string, password: string): Promise<boolean> => {
     try {
       const user = await api.login(email, password);
+      // The `onAuthStateChanged` listener will handle setting the user and navigating.
       if (user) {
-        // onAuthStateChanged will handle setting the user, but we can set it here for immediate UI update.
-        setCurrentUser(user);
         addToast('success', 'أهلاً بعودتك!', `تم تسجيل دخولك بنجاح, ${user.name}.`);
         handleNavigate(Page.Home);
         return true;
       } else {
+        // This case handles wrong credentials from Firebase.
         addToast('error', 'فشل الدخول', 'البريد الإلكتروني أو كلمة المرور غير صحيحة.');
         return false;
       }
-    } catch(error) {
-        addToast('error', 'فشل الدخول', 'حدث خطأ غير متوقع.');
+    } catch(error: any) {
+        if (error.message === 'FIREBASE_NOT_INITIALIZED') {
+            addToast('error', 'فشل تهيئة Firebase', 'لا يمكن الاتصال بالخادم. يرجى التحقق من إعدادات Firebase الخاصة بك.');
+        } else if (error.message === 'AUTH_USER_BANNED') {
+            addToast('error', 'الحساب محظور', 'تم حظر هذا الحساب. يرجى التواصل مع الإدارة.');
+        } else {
+            addToast('error', 'فشل الدخول', 'البريد الإلكتروني أو كلمة المرور غير صحيحة.');
+        }
         return false;
     }
   };
@@ -216,8 +258,12 @@ function AppContent() {
             addToast('error', 'فشل التسجيل', 'هذا البريد الإلكتروني مسجل بالفعل.');
             return false;
         }
-    } catch(error) {
-         addToast('error', 'فشل التسجيل', 'حدث خطأ غير متوقع.');
+    } catch(error: any) {
+         if (error.message === 'FIREBASE_NOT_INITIALIZED') {
+            addToast('error', 'فشل تهيئة Firebase', 'لا يمكن الاتصال بالخادم. يرجى التحقق من إعدادات Firebase الخاصة بك.');
+         } else {
+            addToast('error', 'فشل التسجيل', 'حدث خطأ غير متوقع.');
+         }
          return false;
     }
   };
@@ -319,6 +365,10 @@ function AppContent() {
   const unreadMessagesCount = currentUser
     ? messages.filter(m => m.receiverId === currentUser.id && !m.read).length
     : 0;
+
+  if (!firebaseInitializationSuccess) {
+    return <FirebaseErrorOverlay />;
+  }
 
   const renderPage = () => {
     if (isLoading) {

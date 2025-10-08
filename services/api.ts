@@ -44,9 +44,14 @@ const fetchCollection = async <T>(collectionName: string): Promise<T[]> => {
     return querySnapshot.docs.map(docSnap => docToType<T>(docSnap));
 };
 
+const FIREBASE_INIT_ERROR = 'FIREBASE_NOT_INITIALIZED';
+
 // --- API Service ---
 export const api = {
     async fetchAllData() {
+        if (!db) {
+            throw new Error(FIREBASE_INIT_ERROR);
+        }
         // Fetch all data collections in parallel for efficiency.
         const [users, listings, messages, reports, blogPosts, pages, categories, siteSettings] = await Promise.all([
             fetchCollection<User>('users'),
@@ -63,12 +68,13 @@ export const api = {
 
     // --- Auth & Users ---
     async getUserProfile(uid: string): Promise<User | null> {
+        if (!db) {
+            throw new Error(FIREBASE_INIT_ERROR);
+        }
         try {
             const userDoc = await getDoc(doc(db, 'users', uid));
             if (userDoc.exists()) {
-                const userData = docToType<User>(userDoc);
-                // Ensure user is active before returning profile
-                return userData.status === 'active' ? userData : null;
+                return docToType<User>(userDoc);
             }
             return null;
         } catch (error) {
@@ -78,18 +84,40 @@ export const api = {
     },
 
     async login(email: string, password: string): Promise<User | null> {
+        if (!auth) {
+            throw new Error(FIREBASE_INIT_ERROR);
+        }
         try {
-            // FIX: Call the imported function directly.
             const userCredential = await signInWithEmailAndPassword(auth, email, password);
-            // After successful login, get the full user profile.
-            return this.getUserProfile(userCredential.user.uid);
-        } catch (error) {
+            const userProfile = await this.getUserProfile(userCredential.user.uid);
+
+            if (!userProfile) {
+                // This is an inconsistent state where user exists in Auth but not Firestore.
+                await signOut(auth);
+                throw new Error("User profile not found in database.");
+            }
+
+            if (userProfile.status !== 'active') {
+                // User is banned or has another inactive status. Sign them out and throw a specific error.
+                await signOut(auth);
+                throw new Error('AUTH_USER_BANNED');
+            }
+
+            return userProfile; // Login successful, user is active.
+        } catch (error: any) {
             console.error("Firebase login error:", error);
+            // Re-throw the specific error for the UI to catch, or return null for generic auth errors.
+            if (error.message === 'AUTH_USER_BANNED') {
+                throw error;
+            }
             return null;
         }
     },
 
     async register(newUserData: RegistrationData): Promise<User | null> {
+        if (!auth || !db || !storage) {
+            throw new Error(FIREBASE_INIT_ERROR);
+        }
         try {
             // FIX: Call the imported function directly.
             const userCredential = await createUserWithEmailAndPassword(auth, newUserData.email, newUserData.password!);
@@ -125,6 +153,9 @@ export const api = {
     },
     
     async logout(): Promise<void> {
+        if (!auth) {
+            throw new Error(FIREBASE_INIT_ERROR);
+        }
         // FIX: Call the imported function directly.
         await signOut(auth);
     },
