@@ -1,40 +1,27 @@
 import { initializeApp } from "firebase/app";
+// FIX: Import getAuth as a named export from firebase/auth.
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { getAnalytics } from "firebase/analytics";
 
-// ====================================================================================
-// ====================================================================================
-// =================================== هام جداً =======================================
-//
-//               !!! الصق إعدادات مشروعك في الـ Firebase هنا !!!
-//
-// 1. اذهب إلى https://console.firebase.google.com
-// 2. اختر مشروعك (أو أنشئ واحداً جديداً).
-// 3. اضغط على أيقونة الإعدادات (الترس) واختر "Project settings".
-// 4. في تبويب "General"، انزل إلى قسم "Your apps".
-// 5. اختر تطبيق الويب الخاص بك.
-// 6. تحت "Firebase SDK snippet"، اختر "Config".
-// 7. انسخ الكائن (object) الذي يبدأ بـ `{ apiKey: ... }` والصقه هنا بدلاً من 
-//    الكائن المؤقت `firebaseConfig`.
-//
-// ====================================================================================
-// ====================================================================================
-
+// Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-  authDomain: "your-project-id.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project-id.appspot.com",
-  messagingSenderId: "123456789012",
-  appId: "1:123456789012:web:xxxxxxxxxxxxxxxxxxxxxx"
+  apiKey: "AIzaSyCF26ozSFFHs5hzymzCVIZ5c4Hn5l5KSL4",
+  authDomain: "wino-17628.firebaseapp.com",
+  projectId: "wino-17628",
+  storageBucket: "wino-17628.appspot.com",
+  messagingSenderId: "759405345321",
+  appId: "1:759405345321:web:256de3250b6f7a5ee17a38",
+  measurementId: "G-4LHQ702W68"
 };
-
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
 
 // Export the services you need
+// FIX: Call getAuth directly.
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);

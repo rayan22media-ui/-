@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
-// FIX: Imported SiteSettings from types.ts
+import React, { useState, useEffect } from 'react';
 import { Page, User, Listing, Message, Report, BlogPost, PageContent, AdminAction, RegistrationData, ListingData, SiteSettings } from './types';
 import { ToastProvider, useToast } from './components/Toast';
 import { api } from './services/api';
+import { auth } from './src/firebaseConfig'; // Import auth for onAuthStateChanged
 
 import Header from './components/Header';
 import HomePage from './components/pages/HomePage';
@@ -16,8 +16,6 @@ import BlogPostPage from './components/pages/BlogPostPage';
 import ContentPage from './components/pages/ContentPage';
 import ListingsPage from './components/pages/ListingsPage';
 import ListingDetailPage from './components/pages/ListingDetailPage';
-
-// FIX: Moved SiteSettings interface to types.ts
 
 function useStickyState<T>(defaultValue: T, key: string): [T, React.Dispatch<React.SetStateAction<T>>] {
   const [value, setValue] = useState<T>(() => {
@@ -50,7 +48,8 @@ function useStickyState<T>(defaultValue: T, key: string): [T, React.Dispatch<Rea
 
 function AppContent() {
   const [currentPage, setCurrentPage] = useStickyState<Page>(Page.Home, 'currentPage');
-  const [currentUser, setCurrentUser] = useStickyState<User | null>(null, 'currentUser');
+  // Use regular useState for currentUser; Firebase will handle persistence.
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeConversation, setActiveConversation] = useStickyState<{ partner: User; listing: Listing } | null>(null, 'activeConversation');
   
   const [users, setUsers] = useState<User[]>([]);
@@ -61,6 +60,8 @@ function AppContent() {
   const [pages, setPages] = useState<PageContent[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [siteSettings, setSiteSettings] = useState<SiteSettings>({ logoUrl: '', customFontName: '', customFontBase64: '' });
+  
+  // isLoading now tracks both auth check and data fetching
   const [isLoading, setIsLoading] = useState(true);
 
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
@@ -73,7 +74,7 @@ function AppContent() {
 
   const fetchData = async () => {
     try {
-      setIsLoading(true);
+      // Set loading to true only for data fetching, not auth check.
       const data = await api.fetchAllData();
       
       const usersById = new Map(data.users.map(u => [u.id, u]));
@@ -81,7 +82,7 @@ function AppContent() {
       const hydratedListings = data.listings.map(l => ({
         ...l,
         user: usersById.get(l.userId) || null,
-      })).filter(l => l.user !== null) as Listing[]; // Filter out listings with missing users
+      })).filter(l => l.user !== null) as Listing[];
 
       setUsers(data.users);
       setListings(hydratedListings);
@@ -94,14 +95,30 @@ function AppContent() {
     } catch (error) {
       console.error("Failed to fetch data from Firebase:", error);
       addToast('error', 'خطأ في الاتصال', 'لم نتمكن من جلب البيانات من الخادم.');
-    } finally {
-      setIsLoading(false);
     }
+    // Final loading state is handled by the auth effect
   };
-
+  
+  // This effect runs once on mount to check authentication state.
   useEffect(() => {
-    fetchData();
+    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
+        setIsLoading(true); // Start loading when auth state might change
+        if (firebaseUser) {
+            // User is signed in, fetch their profile data
+            const userProfile = await api.getUserProfile(firebaseUser.uid);
+            setCurrentUser(userProfile);
+        } else {
+            // User is signed out
+            setCurrentUser(null);
+        }
+        // After auth is checked, fetch the rest of the app data
+        await fetchData();
+        setIsLoading(false); // Stop loading after auth check and data fetch
+    });
+
+    return () => unsubscribe(); // Cleanup subscription on unmount
   }, []);
+
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 10);
@@ -158,6 +175,7 @@ function AppContent() {
     try {
       const user = await api.login(email, password);
       if (user) {
+        // onAuthStateChanged will handle setting the user, but we can set it here for immediate UI update.
         setCurrentUser(user);
         addToast('success', 'أهلاً بعودتك!', `تم تسجيل دخولك بنجاح, ${user.name}.`);
         handleNavigate(Page.Home);
@@ -177,6 +195,7 @@ function AppContent() {
         const user = await api.register(newUserData);
         if(user) {
             setUsers(prev => [...prev, user]);
+             // onAuthStateChanged will handle setting the user.
             setCurrentUser(user);
             addToast('success', 'أهلاً بك!', 'تم إنشاء حسابك بنجاح.');
             handleNavigate(Page.Home);
@@ -192,8 +211,7 @@ function AppContent() {
   };
 
   const handleLogout = () => {
-    api.logout();
-    setCurrentUser(null);
+    api.logout(); // This will trigger onAuthStateChanged, which will set currentUser to null.
     handleNavigate(Page.Home);
   };
   

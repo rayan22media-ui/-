@@ -1,11 +1,8 @@
 import { User, ListingData, Message, Report, BlogPost, PageContent, RegistrationData, AdminAction, Listing, SiteSettings } from '../types';
 import { INITIAL_CATEGORIES } from '../constants';
-import { auth, db, storage } from '../firebaseConfig';
-import { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword,
-  signOut
-} from "firebase/auth";
+import { auth, db, storage } from '../src/firebaseConfig';
+// FIX: Use named imports for Firebase auth functions instead of a namespace import.
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
 import { 
   collection, 
   getDocs, 
@@ -64,19 +61,28 @@ export const api = {
         return { users, listings, messages, reports, blogPosts, pages, categories, siteSettings };
     },
 
-    // --- Auth ---
-    async login(email: string, password: string): Promise<User | null> {
+    // --- Auth & Users ---
+    async getUserProfile(uid: string): Promise<User | null> {
         try {
-            const userCredential = await signInWithEmailAndPassword(auth, email, password);
-            const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+            const userDoc = await getDoc(doc(db, 'users', uid));
             if (userDoc.exists()) {
                 const userData = docToType<User>(userDoc);
-                if (userData.status === 'active') {
-                    return userData;
-                }
+                // Ensure user is active before returning profile
+                return userData.status === 'active' ? userData : null;
             }
-            await signOut(auth); // Sign out if profile doesn't exist or is banned
             return null;
+        } catch (error) {
+            console.error("Error fetching user profile:", error);
+            return null;
+        }
+    },
+
+    async login(email: string, password: string): Promise<User | null> {
+        try {
+            // FIX: Call the imported function directly.
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            // After successful login, get the full user profile.
+            return this.getUserProfile(userCredential.user.uid);
         } catch (error) {
             console.error("Firebase login error:", error);
             return null;
@@ -85,6 +91,7 @@ export const api = {
 
     async register(newUserData: RegistrationData): Promise<User | null> {
         try {
+            // FIX: Call the imported function directly.
             const userCredential = await createUserWithEmailAndPassword(auth, newUserData.email, newUserData.password!);
             const { uid } = userCredential.user;
             
@@ -95,8 +102,7 @@ export const api = {
                 avatarUrl = await getDownloadURL(storageRef);
             }
 
-            const newUser: User = {
-                id: uid,
+            const newUser: Omit<User, 'id'> = {
                 name: newUserData.name,
                 email: newUserData.email,
                 phone: newUserData.phone,
@@ -107,7 +113,7 @@ export const api = {
             };
             
             await setDoc(doc(db, 'users', uid), newUser);
-            return newUser;
+            return { ...newUser, id: uid };
         } catch (error: any) {
             if (error.code === 'auth/email-already-in-use') {
                 console.warn('Registration failed: email already in use.');
@@ -119,6 +125,7 @@ export const api = {
     },
     
     async logout(): Promise<void> {
+        // FIX: Call the imported function directly.
         await signOut(auth);
     },
 
@@ -210,6 +217,10 @@ export const api = {
 
     // --- Admin Actions ---
     async performAdminAction(action: AdminAction, payload: any, currentUser: User): Promise<void> {
+        if (currentUser.role !== 'admin') {
+            console.error("Unauthorized admin action attempt.");
+            return;
+        }
         switch (action) {
             case 'UPDATE_USER_STATUS':
                 await updateDoc(doc(db, 'users', payload.id), { status: payload.status });
@@ -221,7 +232,8 @@ export const api = {
                 await updateDoc(doc(db, 'reports', payload.id), { status: payload.status });
                 break;
             case 'CREATE_BLOG_POST':
-                await addDoc(collection(db, 'blogPosts'), { ...payload, authorId: currentUser.id, createdAt: serverTimestamp() });
+                const { id: _, ...newPostData } = payload; // remove id if it exists
+                await addDoc(collection(db, 'blogPosts'), { ...newPostData, authorId: currentUser.id, createdAt: serverTimestamp() });
                 break;
             case 'UPDATE_BLOG_POST':
                 const { id: blogId, ...blogData } = payload;
@@ -234,7 +246,8 @@ export const api = {
                 await deleteDoc(doc(db, 'listings', payload.id));
                 break;
             case 'CREATE_PAGE':
-                await addDoc(collection(db, 'pages'), { ...payload, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+                const { id: __, ...newPageData } = payload; // remove id if it exists
+                await addDoc(collection(db, 'pages'), { ...newPageData, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
                 break;
             case 'UPDATE_PAGE':
                 const { id: pageId, ...pageData } = payload;
@@ -245,7 +258,8 @@ export const api = {
                 break;
             case 'ADD_CATEGORY':
                 const catDoc = doc(db, 'site_data', 'categories');
-                const currentCategories = (await getDoc(catDoc)).data()?.list || [];
+                const catDocSnap = await getDoc(catDoc);
+                const currentCategories = catDocSnap.exists() ? catDocSnap.data().list : [];
                 if (!currentCategories.includes(payload.name)) {
                    await setDoc(catDoc, { list: [...currentCategories, payload.name] });
                 }
