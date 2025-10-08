@@ -1,18 +1,12 @@
 
-// FIX: Manually declare Vite's import.meta.env types as a workaround for project configuration issues
-// that prevent `/// <reference types="vite/client" />` from resolving correctly.
-declare global {
-  interface ImportMeta {
-    readonly env: ImportMetaEnv;
-  }
-  interface ImportMetaEnv {
-    readonly VITE_API_KEY: string;
-  }
-}
-
 import { GoogleGenAI } from "@google/genai";
 
-// Lazy initialization of the AI client to avoid crashing the app if API_KEY is not set.
+// Declare the global variable injected by Vite
+declare const __ENV__: {
+  VITE_API_KEY: string;
+};
+
+// Lazy initialization of the AI client to avoid crashing the app if API_key is not set.
 let ai: GoogleGenAI | null = null;
 
 function getAiInstance(): GoogleGenAI | null {
@@ -20,9 +14,8 @@ function getAiInstance(): GoogleGenAI | null {
     return ai;
   }
   
-  // Use import.meta.env, which is the standard Vite way to access environment variables.
-  // FIX: Removed optional chaining as the env variable types are now declared globally.
-  const apiKey = import.meta.env.VITE_API_KEY;
+  // Read the API key from the injected global __ENV__ object.
+  const apiKey = __ENV__.VITE_API_KEY;
   
   // Check if the API key is present.
   if (apiKey) {

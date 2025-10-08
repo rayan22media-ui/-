@@ -1,37 +1,29 @@
 
-// FIX: Manually declare Vite's import.meta.env types as a workaround for project configuration issues
-// that prevent `/// <reference types="vite/client" />` from resolving correctly.
-declare global {
-  interface ImportMeta {
-    readonly env: ImportMetaEnv;
-  }
-  interface ImportMetaEnv {
-    readonly VITE_FIREBASE_API_KEY: string;
-    readonly VITE_FIREBASE_AUTH_DOMAIN: string;
-    readonly VITE_FIREBASE_PROJECT_ID: string;
-    readonly VITE_FIREBASE_STORAGE_BUCKET: string;
-    readonly VITE_FIREBASE_MESSAGING_SENDER_ID: string;
-    readonly VITE_FIREBASE_APP_ID: string;
-    readonly VITE_FIREBASE_MEASUREMENT_ID: string;
-  }
-}
-
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
-// Vite automatically exposes env variables with VITE_ prefix on import.meta.env
-// Using optional chaining `?.` for safety in non-standard environments.
+// Declare the global variable that Vite will inject.
+declare const __ENV__: {
+    VITE_FIREBASE_API_KEY: string;
+    VITE_FIREBASE_AUTH_DOMAIN: string;
+    VITE_FIREBASE_PROJECT_ID: string;
+    VITE_FIREBASE_STORAGE_BUCKET: string;
+    VITE_FIREBASE_MESSAGING_SENDER_ID: string;
+    VITE_FIREBASE_APP_ID: string;
+    VITE_FIREBASE_MEASUREMENT_ID?: string;
+};
+
+// Read the configuration from the injected global object.
 const firebaseConfig = {
-  // FIX: Removed optional chaining as the env variable types are now declared globally.
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+  apiKey: __ENV__.VITE_FIREBASE_API_KEY,
+  authDomain: __ENV__.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: __ENV__.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: __ENV__.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: __ENV__.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: __ENV__.VITE_FIREBASE_APP_ID,
+  measurementId: __ENV__.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 // Initialize Firebase safely
