@@ -17,7 +17,8 @@ import {
   where,
   Timestamp,
   serverTimestamp,
-  orderBy
+  orderBy,
+  documentId
 } from "firebase/firestore";
 import { 
   ref, 
@@ -41,6 +42,7 @@ const docToType = <T>(docSnap: any): T => {
 
 // Fetches all documents from a collection and converts them to a typed array.
 const fetchCollection = async <T>(collectionName: string): Promise<T[]> => {
+    if (!db) return [];
     const querySnapshot = await getDocs(collection(db, collectionName));
     return querySnapshot.docs.map(docSnap => docToType<T>(docSnap));
 };
@@ -53,14 +55,42 @@ export const api = {
         if (!db) {
             throw new Error(FIREBASE_INIT_ERROR);
         }
-        const [users, listings, blogPosts, pages, categories, siteSettings] = await Promise.all([
-            fetchCollection<User>('users'),
-            fetchCollection<ListingData>('listings'),
+
+        // First, fetch listings to determine which user profiles are needed.
+        const listings = await fetchCollection<ListingData>('listings');
+        const userIds = [...new Set(listings.map(l => l.userId).filter(id => id))];
+
+        // Prepare promises for all other public data fetching.
+        const otherDataPromises: Promise<any>[] = [
             fetchCollection<BlogPost>('blogPosts'),
             fetchCollection<PageContent>('pages'),
             getDoc(doc(db, 'site_data', 'categories')).then(d => d.exists() ? d.data().list : INITIAL_CATEGORIES),
             getDoc(doc(db, 'site_data', 'settings')).then(d => d.exists() ? d.data() as SiteSettings : { logoUrl: '' }),
-        ]);
+        ];
+        
+        // Batch requests for user profiles, respecting Firestore's 10-item limit for 'in' queries.
+        const userBatchesPromises: Promise<any>[] = [];
+        for (let i = 0; i < userIds.length; i += 10) {
+            const batchIds = userIds.slice(i, i + 10);
+            if (batchIds.length > 0) {
+                const usersQuery = query(collection(db, "users"), where(documentId(), "in", batchIds));
+                userBatchesPromises.push(getDocs(usersQuery));
+            }
+        }
+        
+        // Execute all fetches in parallel.
+        const [blogPosts, pages, categories, siteSettings, ...userQuerySnapshots] = await Promise.all([...otherDataPromises, ...userBatchesPromises]);
+        
+        // Process the user query results.
+        const users: User[] = [];
+        userQuerySnapshots.forEach(snapshot => {
+            snapshot.docs.forEach(docSnap => {
+                if(docSnap.exists()){
+                     users.push(docToType<User>(docSnap));
+                }
+            });
+        });
+
         return { users, listings, blogPosts, pages, categories, siteSettings };
     },
     
@@ -178,6 +208,7 @@ export const api = {
 
     // --- Listings ---
     async addListing(newListingData: Omit<ListingData, 'id' | 'userId' | 'createdAt' | 'status'>, currentUser: User): Promise<ListingData> {
+        if (!db || !storage) throw new Error(FIREBASE_INIT_ERROR);
         const imageUrls: string[] = [];
         if (newListingData.images && newListingData.images[0]?.startsWith('data:image')) {
             const listingImageRef = ref(storage, `listings/${currentUser.id}_${Date.now()}`);
@@ -198,6 +229,7 @@ export const api = {
     },
     
     async updateListing(listingId: string, updatedData: Omit<ListingData, 'id' | 'userId' | 'createdAt' | 'status'>): Promise<ListingData | null> {
+        if (!db) return null;
         const docRef = doc(db, 'listings', listingId);
         await updateDoc(docRef, { ...updatedData, status: 'pending' });
         const updatedDoc = await getDoc(docRef);
@@ -205,6 +237,7 @@ export const api = {
     },
 
     async updateUserListingStatus(listingId: string, status: Listing['status']): Promise<ListingData | null> {
+        if (!db) return null;
         const docRef = doc(db, 'listings', listingId);
         await updateDoc(docRef, { status });
         const updatedDoc = await getDoc(docRef);
@@ -213,6 +246,7 @@ export const api = {
     
     // --- Messages ---
     async sendMessage(type: 'text' | 'image' | 'audio', content: string, currentUser: User, activeConversation: { partner: User; listing: Listing }): Promise<Message> {
+        if (!db || !storage) throw new Error(FIREBASE_INIT_ERROR);
         let finalContent = content;
         if ((type === 'image' || type === 'audio') && content.startsWith('data:')) {
             const mediaRef = ref(storage, `messages/${currentUser.id}/${Date.now()}`);
@@ -234,6 +268,7 @@ export const api = {
     },
     
     async markMessagesAsRead(currentUser: User, partner: User, listing: Listing): Promise<Message[]> {
+        if (!db) throw new Error(FIREBASE_INIT_ERROR);
         const q = query(
             collection(db, 'messages'),
             where('receiverId', '==', currentUser.id),
@@ -251,6 +286,7 @@ export const api = {
 
     // --- Reports ---
     async reportListing(listingId: string, reason: string, currentUser: User): Promise<Report> {
+        if (!db) throw new Error(FIREBASE_INIT_ERROR);
         const docRef = await addDoc(collection(db, 'reports'), {
             listingId,
             reporterId: currentUser.id,
@@ -264,8 +300,8 @@ export const api = {
 
     // --- Admin Actions ---
     async performAdminAction(action: AdminAction, payload: any, currentUser: User): Promise<void> {
-        if (currentUser.role !== 'admin') {
-            console.error("Unauthorized admin action attempt.");
+        if (currentUser.role !== 'admin' || !db) {
+            console.error("Unauthorized admin action attempt or DB not initialized.");
             return;
         }
         switch (action) {
