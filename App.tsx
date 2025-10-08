@@ -48,18 +48,30 @@ function useStickyState<T>(defaultValue: T, key: string): [T, React.Dispatch<Rea
 
 const FirebaseErrorOverlay = () => (
   <div className="fixed inset-0 bg-slate-900/80 z-[100] flex items-center justify-center p-4 text-center">
-    <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-lg w-full">
+    <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full text-right" dir="rtl">
         <div className="w-16 h-16 mx-auto bg-red-100 rounded-full flex items-center justify-center mb-4">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
         </div>
-        <h1 className="text-2xl font-bold text-slate-800 mb-2">فشل في تهيئة التطبيق</h1>
-        <p className="text-slate-600">
+        <h1 className="text-2xl font-bold text-slate-800 mb-2 text-center">فشل في تهيئة التطبيق</h1>
+        <p className="text-slate-600 text-center">
             تعذر الاتصال بالخدمات الأساسية، ولا يمكن تشغيل التطبيق حاليًا.
-            <br/><br/>
-            <strong className="font-semibold">للمطورين:</strong> يرجى التحقق من أن متغيرات البيئة الخاصة بـ Firebase (<code>VITE_FIREBASE_...</code>) في ملف <code>.env</code> صحيحة.
         </p>
+         <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700">
+            <p className="font-bold mb-2">للمطورين:</p>
+            <p>لم يتم العثور على إعدادات Firebase. يرجى إنشاء ملف باسم <code>.env</code> في المجلد الرئيسي للمشروع وإضافة المتغيرات التالية مع استبدال <code>...</code> بالقيم الصحيحة من مشروعك على Firebase:</p>
+            <pre className="mt-3 p-3 bg-slate-200 text-slate-800 rounded-md text-left overflow-x-auto" dir="ltr">
+                {`VITE_FIREBASE_API_KEY="..."
+VITE_FIREBASE_AUTH_DOMAIN="..."
+VITE_FIREBASE_PROJECT_ID="..."
+VITE_FIREBASE_STORAGE_BUCKET="..."
+VITE_FIREBASE_MESSAGING_SENDER_ID="..."
+VITE_FIREBASE_APP_ID="..."
+VITE_API_KEY="..."`}
+            </pre>
+            <p className="mt-3 font-semibold">ملاحظة هامة: بعد إضافة أو تعديل ملف <code>.env</code>، يجب إعادة تشغيل خادم التطوير لتطبيق التغييرات.</p>
+        </div>
     </div>
   </div>
 );
