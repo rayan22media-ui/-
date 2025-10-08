@@ -1,14 +1,53 @@
 import { User, Listing, Message, Report, BlogPost, PageContent, RegistrationData, AdminAction } from '../types';
 import { MOCK_USERS_BASE, MOCK_LISTINGS_BASE, MOCK_MESSAGES_BASE, MOCK_REPORTS_BASE, MOCK_BLOG_POSTS_BASE, MOCK_PAGES_BASE, INITIAL_CATEGORIES } from '../constants';
 
-// --- In-memory database simulation ---
-let users: User[] = MOCK_USERS_BASE;
-let listings: Listing[] = MOCK_LISTINGS_BASE;
-let messages: Message[] = MOCK_MESSAGES_BASE;
-let reports: Report[] = MOCK_REPORTS_BASE;
-let blogPosts: BlogPost[] = MOCK_BLOG_POSTS_BASE;
-let pages: PageContent[] = MOCK_PAGES_BASE;
-let categories: string[] = INITIAL_CATEGORIES;
+// --- localStorage Persistence ---
+
+// Helper to load data, falling back to initial mock data
+function loadFromStorage<T>(key: string, defaultValue: T): T {
+  // Check for server-side rendering environments
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+    return defaultValue;
+  }
+  try {
+    const storedValue = window.localStorage.getItem(key);
+    if (storedValue) {
+      // Use a reviver to correctly parse Date objects from strings
+      return JSON.parse(storedValue, (k, v) => {
+        if (['createdAt', 'updatedAt'].includes(k) && typeof v === 'string') {
+          const d = new Date(v);
+          if (!isNaN(d.getTime())) return d;
+        }
+        return v;
+      });
+    }
+  } catch (error) {
+    console.error(`Failed to load '${key}' from localStorage`, error);
+  }
+  return defaultValue;
+}
+
+// Helper to save data
+function saveToStorage<T>(key: string, value: T): void {
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+    return;
+  }
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.error(`Failed to save '${key}' to localStorage`, error);
+  }
+}
+
+// --- In-memory database simulation (now backed by localStorage) ---
+
+let users: User[] = loadFromStorage('db_users', MOCK_USERS_BASE);
+let listings: Listing[] = loadFromStorage('db_listings', MOCK_LISTINGS_BASE);
+let messages: Message[] = loadFromStorage('db_messages', MOCK_MESSAGES_BASE);
+let reports: Report[] = loadFromStorage('db_reports', MOCK_REPORTS_BASE);
+let blogPosts: BlogPost[] = loadFromStorage('db_blogPosts', MOCK_BLOG_POSTS_BASE);
+let pages: PageContent[] = loadFromStorage('db_pages', MOCK_PAGES_BASE);
+let categories: string[] = loadFromStorage('db_categories', INITIAL_CATEGORIES);
 
 // Represents settings configurable by the admin
 interface SiteSettings {
@@ -16,7 +55,20 @@ interface SiteSettings {
   customFontName?: string;
   customFontBase64?: string; // Base64 data URL for the font
 }
-let siteSettings: SiteSettings = { logoUrl: '', customFontName: '', customFontBase64: '' };
+let siteSettings: SiteSettings = loadFromStorage('db_siteSettings', { logoUrl: '', customFontName: '', customFontBase64: '' });
+
+
+// Create a single function to persist all state to avoid repetition
+const persistState = () => {
+    saveToStorage('db_users', users);
+    saveToStorage('db_listings', listings);
+    saveToStorage('db_messages', messages);
+    saveToStorage('db_reports', reports);
+    saveToStorage('db_blogPosts', blogPosts);
+    saveToStorage('db_pages', pages);
+    saveToStorage('db_categories', categories);
+    saveToStorage('db_siteSettings', siteSettings);
+}
 
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -58,6 +110,7 @@ export const api = {
             status: 'active',
         };
         users = [...users, newUser];
+        persistState();
         return Promise.resolve(newUser);
     },
 
@@ -72,6 +125,7 @@ export const api = {
             status: 'pending' // Listings need admin approval
         };
         listings = [...listings, newListing];
+        persistState();
         return Promise.resolve(newListing);
     },
     
@@ -86,6 +140,7 @@ export const api = {
             status: 'pending' as 'pending'
         };
         listings[listingIndex] = updatedListing;
+        persistState();
         return Promise.resolve(updatedListing);
     },
 
@@ -94,6 +149,7 @@ export const api = {
         if (listingIndex === -1) return Promise.resolve(null);
 
         listings[listingIndex].status = status;
+        persistState();
         return Promise.resolve(listings[listingIndex]);
     },
     
@@ -110,6 +166,7 @@ export const api = {
             read: false,
         };
         messages = [...messages, newMessage];
+        persistState();
         return Promise.resolve(newMessage);
     },
     
@@ -125,6 +182,7 @@ export const api = {
             }
             return m;
         });
+        persistState();
         return Promise.resolve(messages);
     },
 
@@ -139,6 +197,7 @@ export const api = {
             status: 'new'
         };
         reports = [...reports, newReport];
+        persistState();
         return Promise.resolve(newReport);
     },
 
@@ -147,12 +206,15 @@ export const api = {
         switch (action) {
             case 'UPDATE_USER_STATUS':
                 users = users.map(user => user.id === payload.id ? { ...user, status: payload.status } : user);
+                persistState();
                 return Promise.resolve(users);
             case 'UPDATE_LISTING_STATUS':
                 listings = listings.map(listing => listing.id === payload.id ? { ...listing, status: payload.status } : listing);
+                persistState();
                 return Promise.resolve(listings);
             case 'UPDATE_REPORT_STATUS':
                 reports = reports.map(report => report.id === payload.id ? { ...report, status: payload.status } : report);
+                persistState();
                 return Promise.resolve(reports);
             case 'CREATE_BLOG_POST': {
                 const newPost: BlogPost = {
@@ -162,16 +224,20 @@ export const api = {
                     createdAt: new Date(),
                 };
                 blogPosts = [newPost, ...blogPosts];
+                persistState();
                 return Promise.resolve(blogPosts);
             }
             case 'UPDATE_BLOG_POST':
                 blogPosts = blogPosts.map(post => post.id === payload.id ? { ...post, ...payload } : post);
+                persistState();
                 return Promise.resolve(blogPosts);
             case 'DELETE_BLOG_POST':
                 blogPosts = blogPosts.filter(post => post.id !== payload.id);
+                persistState();
                 return Promise.resolve(blogPosts);
             case 'DELETE_LISTING':
                 listings = listings.filter(listing => listing.id !== payload.id);
+                persistState();
                 return Promise.resolve(listings);
             case 'CREATE_PAGE': {
                 const newPage: PageContent = {
@@ -181,23 +247,28 @@ export const api = {
                     updatedAt: new Date(),
                 };
                 pages = [...pages, newPage];
+                persistState();
                 return Promise.resolve(pages);
             }
             case 'UPDATE_PAGE': {
                 const updatedPage = { ...payload, updatedAt: new Date() };
                 pages = pages.map(page => page.id === updatedPage.id ? updatedPage : page);
+                persistState();
                 return Promise.resolve(pages);
             }
             case 'DELETE_PAGE':
                 pages = pages.filter(page => page.id !== payload.id);
+                persistState();
                 return Promise.resolve(pages);
             case 'ADD_CATEGORY':
                 if (payload.name && !categories.includes(payload.name)) {
                     categories = [...categories, payload.name];
                 }
+                persistState();
                 return Promise.resolve(categories);
             case 'UPDATE_SITE_SETTINGS':
                 siteSettings = { ...siteSettings, ...payload };
+                persistState();
                 return Promise.resolve(siteSettings);
             default:
                 console.warn("Unhandled admin action:", action);
