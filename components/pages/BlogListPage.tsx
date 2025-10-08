@@ -4,7 +4,8 @@ import { BlogPost, User } from '../../types';
 interface BlogListPageProps {
   posts: BlogPost[];
   users: User[];
-  onPostSelect: (postId: number) => void;
+  // FIX: Changed postId from number to string to match data type.
+  onPostSelect: (postId: string) => void;
 }
 
 const BlogListPage: React.FC<BlogListPageProps> = ({ posts, users, onPostSelect }) => {

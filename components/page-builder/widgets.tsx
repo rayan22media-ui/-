@@ -179,7 +179,8 @@ export const ListingsWidget: React.FC<{ title: string; limit: number; category?:
 
 
 // --- Blog Posts Widget ---
-export const BlogPostsWidget: React.FC<{ title: string; limit: number; blogPosts: BlogPost[]; users: User[]; onPostSelect: (postId: number) => void; onNavigate: (page: Page) => void; }> = ({ title, limit, blogPosts = [], users = [], onPostSelect, onNavigate }) => {
+// FIX: Changed postId from number to string to match data type.
+export const BlogPostsWidget: React.FC<{ title: string; limit: number; blogPosts: BlogPost[]; users: User[]; onPostSelect: (postId: string) => void; onNavigate: (page: Page) => void; }> = ({ title, limit, blogPosts = [], users = [], onPostSelect, onNavigate }) => {
     const recentPosts = useMemo(() => {
         return blogPosts.slice(0, limit || 3);
     }, [blogPosts, limit]);

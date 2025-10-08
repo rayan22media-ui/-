@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI } from "@google/genai";
 
 // Lazy initialization of the AI client to avoid crashing the app if API_KEY is not set.

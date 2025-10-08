@@ -157,7 +157,8 @@ const ListingsManagerView: React.FC<AdminPageProps> = ({ listings, onAdminAction
         deleted: { text: 'مرفوض', className: 'bg-gray-100 text-gray-800' },
     };
     
-    const handleDelete = (listingId: number, listingTitle: string) => {
+    // FIX: Changed listingId from number to string to match data type.
+    const handleDelete = (listingId: string, listingTitle: string) => {
         if (window.confirm(`هل أنت متأكد من أنك تريد حذف العرض "${listingTitle}" بشكل نهائي؟ لا يمكن التراجع عن هذا الإجراء.`)) {
             onAdminAction('DELETE_LISTING', { id: listingId });
         }

@@ -1,9 +1,9 @@
 import React from 'react';
-import { Listing } from '../../types';
+import { ListingData } from '../../types';
 import ListingForm from '../ListingForm';
 
 interface AddListingPageProps {
-  onAddListing: (listing: Omit<Listing, 'id' | 'user' | 'createdAt' | 'status'>) => void;
+  onAddListing: (listing: Omit<ListingData, 'id' | 'userId' | 'createdAt' | 'status'>) => void;
   categories: string[];
 }
 

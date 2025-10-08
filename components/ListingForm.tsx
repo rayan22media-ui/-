@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { Listing } from '../types';
+import { ListingData } from '../types';
 import { GOVERNORATES } from '../constants';
 import { getBarterSuggestion } from '../services/geminiService';
 import { useToast } from './Toast';
 
 interface ListingFormProps {
-  initialData?: Omit<Listing, 'id' | 'user' | 'createdAt' | 'status'>;
-  onSave: (listing: Omit<Listing, 'id' | 'user' | 'createdAt' | 'status'>) => void;
+  initialData?: Omit<ListingData, 'id' | 'userId' | 'createdAt' | 'status'>;
+  onSave: (listing: Omit<ListingData, 'id' | 'userId' | 'createdAt' | 'status'>) => void;
   categories: string[];
   submitButtonText: string;
 }

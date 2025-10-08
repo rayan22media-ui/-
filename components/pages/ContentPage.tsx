@@ -9,7 +9,8 @@ interface ContentPageProps {
   users?: User[];
   categories?: string[];
   onSelectListing?: (listing: Listing) => void;
-  onPostSelect?: (postId: number) => void;
+  // FIX: Changed postId from number to string to match data type.
+  onPostSelect?: (postId: string) => void;
   onNavigate?: (page: Page, params?: any) => void;
 }
 

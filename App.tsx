@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Page, User, Listing, Message, Report, BlogPost, PageContent, AdminAction, RegistrationData } from './types';
+import React, { useState, useEffect, useMemo } from 'react';
+// FIX: Imported SiteSettings from types.ts
+import { Page, User, Listing, Message, Report, BlogPost, PageContent, AdminAction, RegistrationData, ListingData, SiteSettings } from './types';
 import { ToastProvider, useToast } from './components/Toast';
 import { api } from './services/api';
 
@@ -16,18 +17,10 @@ import ContentPage from './components/pages/ContentPage';
 import ListingsPage from './components/pages/ListingsPage';
 import ListingDetailPage from './components/pages/ListingDetailPage';
 
-// Represents settings configurable by the admin
-interface SiteSettings {
-  logoUrl: string; // Stored as a base64 string
-  customFontName?: string;
-  customFontBase64?: string; // Base64 data URL for the font
-}
+// FIX: Moved SiteSettings interface to types.ts
 
-
-// Custom hook for state persistence in localStorage, safe for SSR/build environments like Vercel
 function useStickyState<T>(defaultValue: T, key: string): [T, React.Dispatch<React.SetStateAction<T>>] {
   const [value, setValue] = useState<T>(() => {
-    // Check if we are in a browser environment before accessing localStorage
     if (typeof window === 'undefined') {
       return defaultValue;
     }
@@ -35,7 +28,6 @@ function useStickyState<T>(defaultValue: T, key: string): [T, React.Dispatch<Rea
         const stickyValue = window.localStorage.getItem(key);
         if (stickyValue !== null) {
             return JSON.parse(stickyValue, (k, v) => {
-                // Reviver function to parse date strings back to Date objects
                 if (['createdAt', 'updatedAt'].includes(k) && typeof v === 'string') {
                     const d = new Date(v);
                     if (!isNaN(d.getTime())) return d;
@@ -45,29 +37,22 @@ function useStickyState<T>(defaultValue: T, key: string): [T, React.Dispatch<Rea
         }
     } catch (error) {
         console.error("Failed to parse sticky state from localStorage for key:", key, error);
-        // If parsing fails, fall back to default
     }
     return defaultValue;
   });
 
   useEffect(() => {
-    // This effect only runs on the client where localStorage is available
     window.localStorage.setItem(key, JSON.stringify(value));
   }, [key, value]);
 
   return [value, setValue];
 }
 
-
-
-
 function AppContent() {
-  // UI and Session state can remain sticky
   const [currentPage, setCurrentPage] = useStickyState<Page>(Page.Home, 'currentPage');
   const [currentUser, setCurrentUser] = useStickyState<User | null>(null, 'currentUser');
   const [activeConversation, setActiveConversation] = useStickyState<{ partner: User; listing: Listing } | null>(null, 'activeConversation');
   
-  // Application data state, now fetched from the API service
   const [users, setUsers] = useState<User[]>([]);
   const [listings, setListings] = useState<Listing[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -76,51 +61,59 @@ function AppContent() {
   const [pages, setPages] = useState<PageContent[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [siteSettings, setSiteSettings] = useState<SiteSettings>({ logoUrl: '', customFontName: '', customFontBase64: '' });
+  const [isLoading, setIsLoading] = useState(true);
 
-  const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [selectedPageSlug, setSelectedPageSlug] = useState<string | null>(null);
-  const [selectedListingId, setSelectedListingId] = useState<number | null>(null);
+  const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
 
-  // State for UI enhancements
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const { addToast } = useToast();
 
-  // Effect to fetch all data from the service layer on initial load
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      const data = await api.fetchAllData();
+      
+      const usersById = new Map(data.users.map(u => [u.id, u]));
+      
+      const hydratedListings = data.listings.map(l => ({
+        ...l,
+        user: usersById.get(l.userId) || null,
+      })).filter(l => l.user !== null) as Listing[]; // Filter out listings with missing users
+
+      setUsers(data.users);
+      setListings(hydratedListings);
+      setMessages(data.messages);
+      setReports(data.reports);
+      setBlogPosts(data.blogPosts);
+      setPages(data.pages);
+      setCategories(data.categories);
+      setSiteSettings(data.siteSettings);
+    } catch (error) {
+      console.error("Failed to fetch data from Firebase:", error);
+      addToast('error', 'خطأ في الاتصال', 'لم نتمكن من جلب البيانات من الخادم.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    api.fetchAllData().then(data => {
-        setUsers(data.users);
-        setListings(data.listings);
-        setMessages(data.messages);
-        setReports(data.reports);
-        setBlogPosts(data.blogPosts);
-        setPages(data.pages);
-        setCategories(data.categories);
-        setSiteSettings(data.siteSettings);
-    });
+    fetchData();
   }, []);
 
-  // Effect to handle scroll detection for dynamic header
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 10);
-    };
+    const handleScroll = () => setIsScrolled(window.scrollY > 10);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
   
-  // Effect to apply custom font globally
   useEffect(() => {
     const styleElement = document.getElementById('custom-font-style');
     const root = document.documentElement;
-
     if (siteSettings.customFontBase64 && siteSettings.customFontName && styleElement) {
-      const fontFaceRule = `
-        @font-face {
-          font-family: '${siteSettings.customFontName}';
-          src: url(${siteSettings.customFontBase64});
-        }
-      `;
+      const fontFaceRule = `@font-face { font-family: '${siteSettings.customFontName}'; src: url(${siteSettings.customFontBase64}); }`;
       styleElement.innerHTML = fontFaceRule;
       root.style.setProperty('--custom-font', `'${siteSettings.customFontName}', sans-serif`);
     } else {
@@ -129,182 +122,168 @@ function AppContent() {
     }
   }, [siteSettings.customFontName, siteSettings.customFontBase64]);
 
-  // Effect to prevent body scroll when mobile menu or modal is open
   useEffect(() => {
-    if (isMobileMenuOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
+    document.body.style.overflow = isMobileMenuOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
   }, [isMobileMenuOpen]);
   
-  const handleNavigate = (page: Page, params?: { postId?: number; slug?: string; listingId?: number }) => {
+  const handleNavigate = (page: Page, params?: { postId?: string; slug?: string; listingId?: string }) => {
     if (page !== Page.Messages) setActiveConversation(null);
     
-    // Reset IDs on navigation to ensure clean state
     setSelectedPostId(null);
     setSelectedPageSlug(null);
     setSelectedListingId(null);
 
-    if (page === Page.BlogPost && params?.postId) {
-        setSelectedPostId(params.postId);
-    } else if (page === Page.ContentPage && params?.slug) {
-        setSelectedPageSlug(params.slug);
-    } else if (page === Page.ListingDetail && params?.listingId) {
-        setSelectedListingId(params.listingId);
-    }
+    if (page === Page.BlogPost && params?.postId) setSelectedPostId(params.postId);
+    else if (page === Page.ContentPage && params?.slug) setSelectedPageSlug(params.slug);
+    else if (page === Page.ListingDetail && params?.listingId) setSelectedListingId(params.listingId);
     
     setCurrentPage(page);
-    setIsMobileMenuOpen(false); // Close mobile menu on any navigation
+    setIsMobileMenuOpen(false);
     window.scrollTo(0, 0);
   };
   
-  // Effect for handling deep links from URL on initial load
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const pageParam = params.get('page');
     const listingIdParam = params.get('listingId');
-    
     if (pageParam === Page.ListingDetail && listingIdParam) {
-        const listingId = parseInt(listingIdParam, 10);
-        if (!isNaN(listingId) && listings.some(l => l.id === listingId)) {
-            handleNavigate(Page.ListingDetail, { listingId: listingId });
+        if (!isLoading && listings.some(l => l.id === listingIdParam)) {
+            handleNavigate(Page.ListingDetail, { listingId: listingIdParam });
         }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listings]); // Depend on listings to ensure data is loaded before checking
+  }, [listings, isLoading]);
   
-  const handleLogin = (email: string, password: string): boolean => {
-    api.login(email, password).then(user => {
+  const handleLogin = async (email: string, password: string): Promise<boolean> => {
+    try {
+      const user = await api.login(email, password);
       if (user) {
         setCurrentUser(user);
         addToast('success', 'أهلاً بعودتك!', `تم تسجيل دخولك بنجاح, ${user.name}.`);
         handleNavigate(Page.Home);
+        return true;
       } else {
-         addToast('error', 'فشل الدخول', 'البريد الإلكتروني أو كلمة المرور غير صحيحة.');
+        addToast('error', 'فشل الدخول', 'البريد الإلكتروني أو كلمة المرور غير صحيحة.');
+        return false;
       }
-    });
-    return true; // Assume async operation, UI handles feedback
+    } catch(error) {
+        addToast('error', 'فشل الدخول', 'حدث خطأ غير متوقع.');
+        return false;
+    }
   };
 
-  const handleRegister = (newUserData: RegistrationData): boolean => {
-    api.register(newUserData).then(user => {
+  const handleRegister = async (newUserData: RegistrationData): Promise<boolean> => {
+    try {
+        const user = await api.register(newUserData);
         if(user) {
             setUsers(prev => [...prev, user]);
             setCurrentUser(user);
             addToast('success', 'أهلاً بك!', 'تم إنشاء حسابك بنجاح.');
             handleNavigate(Page.Home);
+            return true;
         } else {
             addToast('error', 'فشل التسجيل', 'هذا البريد الإلكتروني مسجل بالفعل.');
+            return false;
         }
-    });
-    return true;
+    } catch(error) {
+         addToast('error', 'فشل التسجيل', 'حدث خطأ غير متوقع.');
+         return false;
+    }
   };
 
   const handleLogout = () => {
+    api.logout();
     setCurrentUser(null);
     handleNavigate(Page.Home);
   };
   
-  const handleAddListing = (newListingData: Omit<Listing, 'id' | 'user' | 'createdAt' | 'status'>) => {
+  const handleAddListing = async (newListingData: Omit<ListingData, 'id' | 'userId' | 'createdAt' | 'status'>) => {
       if (!currentUser) {
           addToast('warning', 'مطلوب تسجيل الدخول', 'يجب تسجيل الدخول لإضافة عرض.');
           return;
       }
-      api.addListing(newListingData, currentUser).then(newListing => {
-          setListings(prev => [...prev, newListing]);
-          addToast('info', 'تم استلام عرضك', 'تمت إضافة عرضك بنجاح، وهو الآن قيد المراجعة.');
-          handleNavigate(Page.Profile);
-      });
+      try {
+        const newListing = await api.addListing(newListingData, currentUser);
+        const hydratedListing = { ...newListing, user: currentUser };
+        setListings(prev => [...prev, hydratedListing]);
+        addToast('info', 'تم استلام عرضك', 'تمت إضافة عرضك بنجاح، وهو الآن قيد المراجعة.');
+        handleNavigate(Page.Profile);
+      } catch (error) {
+        addToast('error', 'خطأ', 'لم نتمكن من إضافة العرض.');
+      }
   };
   
   const handleSelectListing = (listing: Listing) => {
     handleNavigate(Page.ListingDetail, { listingId: listing.id });
   };
 
-  const handleStartConversation = (partner: User, listing: Listing) => {
+  const handleStartConversation = async (partner: User, listing: Listing) => {
       if (currentUser) {
-         api.markMessagesAsRead(currentUser, partner, listing).then(setMessages);
+         const updatedMessages = await api.markMessagesAsRead(currentUser, partner, listing);
+         setMessages(updatedMessages);
       }
       setActiveConversation({ partner, listing });
       handleNavigate(Page.Messages);
   };
 
-  const handleSendMessage = (type: 'text' | 'image' | 'audio', content: string) => {
+  const handleSendMessage = async (type: 'text' | 'image' | 'audio', content: string) => {
       if (!currentUser || !activeConversation) return;
-      api.sendMessage(type, content, currentUser, activeConversation).then(newMessage => {
-          setMessages(prev => [...prev, newMessage]);
-      });
+      try {
+        const newMessage = await api.sendMessage(type, content, currentUser, activeConversation);
+        setMessages(prev => [...prev, newMessage]);
+      } catch(e) {
+        addToast('error', 'خطأ', 'لم يتم إرسال الرسالة.');
+      }
   };
   
-  const handleBackToInbox = () => {
-      setActiveConversation(null);
-  };
+  const handleBackToInbox = () => setActiveConversation(null);
   
-  const handleReportListing = (listingId: number, reason: string) => {
+  const handleReportListing = async (listingId: string, reason: string) => {
       if (!currentUser) {
           addToast('warning', 'مطلوب تسجيل الدخول', 'يجب تسجيل الدخول للإبلاغ عن عرض.');
           return;
       }
-      api.reportListing(listingId, reason, currentUser).then(newReport => {
-          setReports(prev => [...prev, newReport]);
-          addToast('success', 'تم إرسال البلاغ', 'شكراً لك، تم إرسال بلاغك للإدارة وسنراجعه قريباً.');
-      });
+      try {
+        const newReport = await api.reportListing(listingId, reason, currentUser);
+        setReports(prev => [...prev, newReport]);
+        addToast('success', 'تم إرسال البلاغ', 'شكراً لك، تم إرسال بلاغك للإدارة وسنراجعه قريباً.');
+      } catch(e) {
+         addToast('error', 'خطأ', 'لم نتمكن من إرسال البلاغ.');
+      }
   };
 
-  const handleUpdateUserListingStatus = (listingId: number, status: Listing['status']) => {
-    if (!currentUser) { addToast('error', 'غير مصرح به', 'يجب عليك تسجيل الدخول لتغيير حالة العرض.'); return; }
+  const handleUpdateUserListingStatus = async (listingId: string, status: Listing['status']) => {
+    if (!currentUser) return;
     const listingToUpdate = listings.find(l => l.id === listingId);
-    if (!listingToUpdate) { addToast('error', 'خطأ', 'العرض غير موجود.'); return; }
-    if (listingToUpdate.user.id !== currentUser.id) { addToast('error', 'غير مصرح به', 'لا يمكنك تعديل هذا العرض.'); return; }
+    if (!listingToUpdate || listingToUpdate.userId !== currentUser.id) return;
     
-    api.updateUserListingStatus(listingId, status).then(updatedListing => {
-        if(updatedListing) {
-            setListings(listings.map(l => l.id === listingId ? updatedListing : l));
-            if (status === 'traded') addToast('success', 'تم التحديث', 'تم تغيير حالة عرضك إلى "تمت المقايضة".');
-            else if (status === 'active') addToast('success', 'تم التحديث', 'تم إعادة عرضك وهو الآن نشط.');
-        }
-    });
+    const updatedListingData = await api.updateUserListingStatus(listingId, status);
+    if(updatedListingData) {
+        const hydratedListing = { ...updatedListingData, user: currentUser };
+        setListings(listings.map(l => l.id === listingId ? hydratedListing : l));
+        if (status === 'traded') addToast('success', 'تم التحديث', 'تم تغيير حالة عرضك إلى "تمت المقايضة".');
+        else if (status === 'active') addToast('success', 'تم التحديث', 'تم إعادة عرضك وهو الآن نشط.');
+    }
   };
   
-  const handleUpdateListing = (listingId: number, updatedData: Omit<Listing, 'id' | 'user' | 'createdAt' | 'status'>) => {
-    if (!currentUser) { addToast('error', 'غير مصرح به', 'يجب تسجيل الدخول لتعديل العرض.'); return; }
+  const handleUpdateListing = async (listingId: string, updatedData: Omit<ListingData, 'id' | 'userId' | 'createdAt' | 'status'>) => {
+    if (!currentUser) return;
     const listingIndex = listings.findIndex(l => l.id === listingId);
-    if (listingIndex === -1) { addToast('error', 'خطأ', 'العرض غير موجود.'); return; }
-    if (listings[listingIndex].user.id !== currentUser.id) { addToast('error', 'غير مصرح به', 'لا تملك صلاحية تعديل هذا العرض.'); return; }
+    if (listingIndex === -1 || listings[listingIndex].userId !== currentUser.id) return;
 
-    api.updateListing(listingId, updatedData).then(updatedListing => {
-        if(updatedListing) {
-            setListings(listings.map(l => l.id === listingId ? updatedListing : l));
-            addToast('info', 'تم إرسال التعديلات', 'تم حفظ تعديلاتك، وهي الآن قيد المراجعة.');
-        }
-    });
+    const updatedListingData = await api.updateListing(listingId, updatedData);
+    if(updatedListingData) {
+        const hydratedListing = { ...updatedListingData, user: currentUser };
+        setListings(listings.map(l => l.id === listingId ? hydratedListing : l));
+        addToast('info', 'تم إرسال التعديلات', 'تم حفظ تعديلاتك، وهي الآن قيد المراجعة.');
+    }
   };
 
-  const handleAdminAction = (action: AdminAction, payload: any) => {
+  const handleAdminAction = async (action: AdminAction, payload: any) => {
       if (!currentUser) return;
-      api.performAdminAction(action, payload, currentUser).then(result => {
-           switch (action) {
-              case 'UPDATE_USER_STATUS': setUsers(result); break;
-              case 'UPDATE_LISTING_STATUS':
-              case 'DELETE_LISTING': setListings(result); break;
-              case 'UPDATE_REPORT_STATUS': setReports(result); break;
-              case 'CREATE_BLOG_POST':
-              case 'UPDATE_BLOG_POST':
-              case 'DELETE_BLOG_POST': setBlogPosts(result); break;
-              case 'CREATE_PAGE':
-              case 'UPDATE_PAGE':
-              case 'DELETE_PAGE': setPages(result); break;
-              case 'ADD_CATEGORY': setCategories(result); break;
-              case 'UPDATE_SITE_SETTINGS':
-                  setSiteSettings(result);
-                  addToast('success', 'تم الحفظ', 'تم حفظ إعدادات الموقع بنجاح.');
-                  break;
-            }
-      });
+      await api.performAdminAction(action, payload, currentUser);
+      addToast('success', 'تم تنفيذ الإجراء', `تم تنفيذ الإجراء الإداري بنجاح.`);
+      await fetchData(); // Refresh all data to reflect changes
   };
 
   const unreadMessagesCount = currentUser
@@ -312,66 +291,37 @@ function AppContent() {
     : 0;
 
   const renderPage = () => {
+    if (isLoading) {
+      return <div className="flex justify-center items-center h-[calc(100vh-80px)]"><div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-600"></div></div>;
+    }
     const selectedPost = selectedPostId ? blogPosts.find(p => p.id === selectedPostId) : null;
     const author = selectedPost ? users.find(u => u.id === selectedPost.authorId) : null;
     const selectedCustomPage = selectedPageSlug ? pages.find(p => p.slug === selectedPageSlug && p.status === 'published') : null;
     const selectedListingData = selectedListingId ? listings.find(l => l.id === selectedListingId) : null;
 
-    const mainHomePage = <HomePage
-        listings={listings}
-        blogPosts={blogPosts}
-        onSelectListing={handleSelectListing}
-        onPostSelect={(id) => handleNavigate(Page.BlogPost, { postId: id })}
-        onNavigate={handleNavigate}
-        categories={categories}
-    />;
-    
+    const mainHomePage = <HomePage listings={listings} blogPosts={blogPosts} onSelectListing={handleSelectListing} onPostSelect={(id) => handleNavigate(Page.BlogPost, { postId: id })} onNavigate={handleNavigate} categories={categories} />;
     const loginPage = <LoginPage onLogin={handleLogin} onRegister={handleRegister} onNavigateToHome={() => handleNavigate(Page.Home)} />;
 
     switch (currentPage) {
-      case Page.Home:
-        return mainHomePage;
-      case Page.Login:
-        return loginPage;
-      case Page.Profile:
-        return currentUser ? <ProfilePage currentUser={currentUser} listings={listings} onSelectListing={handleSelectListing} /> : loginPage;
-      case Page.AddListing:
-        return currentUser ? <AddListingPage onAddListing={handleAddListing} categories={categories} /> : loginPage;
-      case Page.Messages:
-        return currentUser ? <MessagesPage messages={messages} currentUser={currentUser} listings={listings} users={users} activeConversation={activeConversation} onSendMessage={handleSendMessage} onStartConversation={handleStartConversation} onBackToInbox={handleBackToInbox} /> : loginPage;
-      case Page.Admin:
-         return currentUser?.role === 'admin' ? <AdminPage users={users} listings={listings} reports={reports} blogPosts={blogPosts} pages={pages} categories={categories} siteSettings={siteSettings} onAdminAction={handleAdminAction} onSelectListing={handleSelectListing} /> : mainHomePage;
-      case Page.Listings:
-        return <ListingsPage listings={listings} onSelectListing={handleSelectListing} categories={categories} />;
-      case Page.Blog:
-        return <BlogListPage posts={blogPosts} users={users} onPostSelect={(id) => handleNavigate(Page.BlogPost, { postId: id })} />;
-      case Page.BlogPost:
-        return selectedPost && author ? <BlogPostPage post={selectedPost} author={author} /> : <BlogListPage posts={blogPosts} users={users} onPostSelect={(id) => handleNavigate(Page.BlogPost, { postId: id })} />;
-      case Page.ContentPage:
-        return selectedCustomPage ? <ContentPage page={selectedCustomPage} onNavigate={handleNavigate} listings={listings} blogPosts={blogPosts} users={users} categories={categories} onSelectListing={handleSelectListing} onPostSelect={(id) => handleNavigate(Page.BlogPost, { postId: id })} /> : mainHomePage;
-      case Page.ListingDetail:
-        return selectedListingData ? <ListingDetailPage listing={selectedListingData} allListings={listings} currentUser={currentUser} onBack={() => window.history.back()} onStartConversation={handleStartConversation} onReportListing={handleReportListing} onSelectUserListing={handleSelectListing} onUpdateStatus={handleUpdateUserListingStatus} onUpdateListing={handleUpdateListing} categories={categories} /> : mainHomePage;
-      default:
-        return mainHomePage;
+      case Page.Home: return mainHomePage;
+      case Page.Login: return loginPage;
+      case Page.Profile: return currentUser ? <ProfilePage currentUser={currentUser} listings={listings} onSelectListing={handleSelectListing} /> : loginPage;
+      case Page.AddListing: return currentUser ? <AddListingPage onAddListing={handleAddListing} categories={categories} /> : loginPage;
+      case Page.Messages: return currentUser ? <MessagesPage messages={messages} currentUser={currentUser} listings={listings} users={users} activeConversation={activeConversation} onSendMessage={handleSendMessage} onStartConversation={handleStartConversation} onBackToInbox={handleBackToInbox} /> : loginPage;
+      case Page.Admin: return currentUser?.role === 'admin' ? <AdminPage users={users} listings={listings} reports={reports} blogPosts={blogPosts} pages={pages} categories={categories} siteSettings={siteSettings} onAdminAction={handleAdminAction} onSelectListing={handleSelectListing} /> : mainHomePage;
+      case Page.Listings: return <ListingsPage listings={listings} onSelectListing={handleSelectListing} categories={categories} />;
+      case Page.Blog: return <BlogListPage posts={blogPosts} users={users} onPostSelect={(id) => handleNavigate(Page.BlogPost, { postId: id })} />;
+      case Page.BlogPost: return selectedPost && author ? <BlogPostPage post={selectedPost} author={author} /> : <BlogListPage posts={blogPosts} users={users} onPostSelect={(id) => handleNavigate(Page.BlogPost, { postId: id })} />;
+      case Page.ContentPage: return selectedCustomPage ? <ContentPage page={selectedCustomPage} onNavigate={handleNavigate} listings={listings} blogPosts={blogPosts} users={users} categories={categories} onSelectListing={handleSelectListing} onPostSelect={(id) => handleNavigate(Page.BlogPost, { postId: id })} /> : mainHomePage;
+      case Page.ListingDetail: return selectedListingData ? <ListingDetailPage listing={selectedListingData} allListings={listings} currentUser={currentUser} onBack={() => window.history.back()} onStartConversation={handleStartConversation} onReportListing={handleReportListing} onSelectUserListing={handleSelectListing} onUpdateStatus={handleUpdateUserListingStatus} onUpdateListing={handleUpdateListing} categories={categories} /> : mainHomePage;
+      default: return mainHomePage;
     }
   };
 
   return (
     <div className="bg-slate-50 text-slate-800" dir="rtl">
-        <Header 
-          currentUser={currentUser} 
-          pages={pages}
-          logoUrl={siteSettings.logoUrl}
-          onNavigate={handleNavigate} 
-          onLogout={handleLogout} 
-          isMobileMenuOpen={isMobileMenuOpen}
-          toggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          isScrolled={isScrolled}
-          unreadMessagesCount={unreadMessagesCount}
-        />
-        <main className="pt-20"> {/* Add padding top to avoid content being hidden by sticky header */}
-            {renderPage()}
-        </main>
+        <Header currentUser={currentUser} pages={pages} logoUrl={siteSettings.logoUrl} onNavigate={handleNavigate} onLogout={handleLogout} isMobileMenuOpen={isMobileMenuOpen} toggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)} isScrolled={isScrolled} unreadMessagesCount={unreadMessagesCount}/>
+        <main className="pt-20">{renderPage()}</main>
     </div>
   );
 }

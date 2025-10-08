@@ -9,7 +9,7 @@ interface ProfilePageProps {
 }
 
 const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, listings, onSelectListing }) => {
-  const userListings = listings.filter(listing => listing.user.id === currentUser.id);
+  const userListings = listings.filter(listing => listing.userId === currentUser.id);
 
   return (
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">

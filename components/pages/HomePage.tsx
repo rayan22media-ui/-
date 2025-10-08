@@ -7,7 +7,8 @@ interface HomePageProps {
   listings: Listing[];
   blogPosts: BlogPost[];
   onSelectListing: (listing: Listing) => void;
-  onPostSelect: (postId: number) => void;
+  // FIX: Changed postId to string to match the data type.
+  onPostSelect: (postId: string) => void;
   onNavigate: (page: Page) => void;
   categories: string[];
 }
@@ -49,7 +50,8 @@ const SectionHeader: React.FC<{ title: string; onViewAll?: () => void }> = ({ ti
     </div>
 );
 
-const RecentBlogPosts: React.FC<{ posts: BlogPost[], onPostSelect: (id: number) => void, onNavigateToBlog: () => void }> = ({ posts, onPostSelect, onNavigateToBlog }) => {
+// FIX: Changed id to string to match the data type.
+const RecentBlogPosts: React.FC<{ posts: BlogPost[], onPostSelect: (id: string) => void, onNavigateToBlog: () => void }> = ({ posts, onPostSelect, onNavigateToBlog }) => {
     const recentPosts = posts.slice(0, 3);
     if (recentPosts.length === 0) return null;
 

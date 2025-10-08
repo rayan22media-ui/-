@@ -7,7 +7,8 @@ interface ListingDetailModalProps {
   currentUser: User | null;
   onClose: () => void;
   onStartConversation: (partner: User, listing: Listing) => void;
-  onReportListing: (listingId: number, reason: string) => void;
+  // FIX: Changed listingId from number to string to match data type.
+  onReportListing: (listingId: string, reason: string) => void;
 }
 
 const ListingDetailModal: React.FC<ListingDetailModalProps> = ({ listing, currentUser, onClose, onStartConversation, onReportListing }) => {

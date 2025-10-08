@@ -4,8 +4,9 @@ import { GOVERNORATES } from '../../constants';
 import { useToast } from '../Toast';
 
 interface LoginPageProps {
-  onLogin: (email: string, password: string) => boolean;
-  onRegister: (userData: RegistrationData) => boolean;
+  // FIX: Changed return types to Promise<boolean> to support async operations.
+  onLogin: (email: string, password: string) => Promise<boolean>;
+  onRegister: (userData: RegistrationData) => Promise<boolean>;
   onNavigateToHome: () => void;
 }
 
@@ -38,15 +39,14 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onRegister, onNavigateTo
   
   const { addToast } = useToast();
 
-  const handleLogin = (e: React.FormEvent) => {
+  // FIX: Made function async and awaited onLogin. Removed buggy toast logic.
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const success = onLogin(loginEmail, loginPassword);
-    if (!success) {
-      addToast('error', 'فشل الدخول', 'البريد الإلكتروني أو كلمة المرور غير صحيحة.');
-    }
+    await onLogin(loginEmail, loginPassword);
   };
   
-  const handleRegister = (e: React.FormEvent) => {
+  // FIX: Made function async and awaited onRegister.
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (registerPassword !== confirmPassword) {
         addToast('error', 'خطأ في التسجيل', 'كلمتا المرور غير متطابقتين.');
@@ -58,7 +58,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onRegister, onNavigateTo
         return;
     }
 
-    onRegister({
+    await onRegister({
         name,
         email: registerEmail,
         password: registerPassword,

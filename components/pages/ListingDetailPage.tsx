@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Listing, User, Page } from '../../types';
+import { Listing, User, Page, ListingData } from '../../types';
 import { useToast } from '../Toast';
 import ListingCard from '../ListingCard';
 import ListingForm from '../ListingForm';
@@ -10,10 +10,10 @@ interface ListingDetailPageProps {
   currentUser: User | null;
   onBack: () => void;
   onStartConversation: (partner: User, listing: Listing) => void;
-  onReportListing: (listingId: number, reason: string) => void;
+  onReportListing: (listingId: string, reason: string) => void;
   onSelectUserListing: (listing: Listing) => void;
-  onUpdateStatus: (listingId: number, status: Listing['status']) => void;
-  onUpdateListing: (listingId: number, data: Omit<Listing, 'id' | 'user' | 'createdAt' | 'status'>) => void;
+  onUpdateStatus: (listingId: string, status: Listing['status']) => void;
+  onUpdateListing: (listingId: string, data: Omit<ListingData, 'id' | 'userId' | 'createdAt' | 'status'>) => void;
   categories: string[];
 }
 
@@ -50,10 +50,10 @@ const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listing, allListi
     const [isEditing, setIsEditing] = useState(false);
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     
-    const isOwner = currentUser?.id === listing.user.id;
+    const isOwner = currentUser?.id === listing.userId;
     
     const otherListingsFromUser = allListings.filter(
-        l => l.user.id === listing.user.id && l.id !== listing.id && l.status === 'active'
+        l => l.userId === listing.userId && l.id !== listing.id && l.status === 'active'
     ).slice(0, 2);
 
     const handleStartChat = () => {
@@ -61,7 +61,7 @@ const ListingDetailPage: React.FC<ListingDetailPageProps> = ({ listing, allListi
             addToast('warning', 'مطلوب تسجيل الدخول', 'يرجى تسجيل الدخول لبدء المحادثة.');
             return;
         }
-        if (currentUser.id === listing.user.id) {
+        if (currentUser.id === listing.userId) {
             addToast('warning', 'لا يمكن', 'لا يمكنك بدء محادثة مع نفسك.');
             return;
         }

@@ -5,7 +5,8 @@ interface HeaderProps {
   currentUser: User | null;
   pages: PageContent[];
   logoUrl: string;
-  onNavigate: (page: Page, params?: { postId?: number; slug?: string }) => void;
+  // FIX: Changed postId from number to string to match the actual ID type.
+  onNavigate: (page: Page, params?: { postId?: string; slug?: string }) => void;
   onLogout: () => void;
   isMobileMenuOpen: boolean;
   toggleMobileMenu: () => void;
