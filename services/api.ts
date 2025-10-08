@@ -1,3 +1,4 @@
+// Import the functions you need from the SDKs you need
 import { User, ListingData, Message, Report, BlogPost, PageContent, RegistrationData, AdminAction, Listing, SiteSettings } from '../types';
 import { INITIAL_CATEGORIES } from '../constants';
 import { auth, db, storage } from '../src/firebaseConfig';
@@ -48,6 +49,21 @@ const FIREBASE_INIT_ERROR = 'FIREBASE_NOT_INITIALIZED';
 
 // --- API Service ---
 export const api = {
+    async fetchPublicData() {
+        if (!db) {
+            throw new Error(FIREBASE_INIT_ERROR);
+        }
+        const [users, listings, blogPosts, pages, categories, siteSettings] = await Promise.all([
+            fetchCollection<User>('users'),
+            fetchCollection<ListingData>('listings'),
+            fetchCollection<BlogPost>('blogPosts'),
+            fetchCollection<PageContent>('pages'),
+            getDoc(doc(db, 'site_data', 'categories')).then(d => d.exists() ? d.data().list : INITIAL_CATEGORIES),
+            getDoc(doc(db, 'site_data', 'settings')).then(d => d.exists() ? d.data() as SiteSettings : { logoUrl: '' }),
+        ]);
+        return { users, listings, blogPosts, pages, categories, siteSettings };
+    },
+    
     async fetchAllData() {
         if (!db) {
             throw new Error(FIREBASE_INIT_ERROR);

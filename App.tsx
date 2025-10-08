@@ -60,14 +60,18 @@ const FirebaseErrorOverlay = () => (
         </p>
          <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700">
             <p className="font-bold mb-2">للمطورين:</p>
-            <p>لم يتم العثور على إعدادات Firebase. يرجى إنشاء ملف باسم <code>.env</code> في المجلد الرئيسي للمشروع وإضافة المتغيرات التالية مع استبدال <code>...</code> بالقيم الصحيحة من مشروعك على Firebase:</p>
+            <p>لم يتم العثور على إعدادات Firebase. يرجى إنشاء ملف باسم <code>.env</code> في المجلد الرئيسي للمشروع ونسخ المحتوى التالي إليه، مع استبدال قيمة <code>VITE_API_KEY</code> بمفتاح Gemini الخاص بك:</p>
             <pre className="mt-3 p-3 bg-slate-200 text-slate-800 rounded-md text-left overflow-x-auto" dir="ltr">
-                {`VITE_FIREBASE_API_KEY="..."
-VITE_FIREBASE_AUTH_DOMAIN="..."
-VITE_FIREBASE_PROJECT_ID="..."
-VITE_FIREBASE_STORAGE_BUCKET="..."
-VITE_FIREBASE_MESSAGING_SENDER_ID="..."
-VITE_FIREBASE_APP_ID="..."
+                {`# Firebase Configuration
+VITE_FIREBASE_API_KEY="AIzaSyCF26ozSFFHs5hzymzCVIZ5c4Hn5l5KSL4"
+VITE_FIREBASE_AUTH_DOMAIN="wino-17628.firebaseapp.com"
+VITE_FIREBASE_PROJECT_ID="wino-17628"
+VITE_FIREBASE_STORAGE_BUCKET="wino-17628.firebasestorage.app"
+VITE_FIREBASE_MESSAGING_SENDER_ID="759405345321"
+VITE_FIREBASE_APP_ID="1:759405345321:web:256de3250b6f7a5ee17a38"
+VITE_FIREBASE_MEASUREMENT_ID="G-4LHQ702W68"
+
+# Gemini AI Configuration (for suggestions feature)
 VITE_API_KEY="..."`}
             </pre>
             <p className="mt-3 font-semibold">ملاحظة هامة: بعد إضافة أو تعديل ملف <code>.env</code>، يجب إعادة تشغيل خادم التطوير لتطبيق التغييرات.</p>
@@ -105,7 +109,6 @@ function AppContent() {
 
   const fetchData = async () => {
     try {
-      // Set loading to true only for data fetching, not auth check.
       const data = await api.fetchAllData();
       
       const usersById = new Map(data.users.map(u => [u.id, u]));
@@ -131,8 +134,40 @@ function AppContent() {
           addToast('error', 'خطأ في الاتصال', 'لم نتمكن من جلب البيانات من الخادم.');
       }
     }
-    // Final loading state is handled by the auth effect
   };
+  
+  const fetchPublicDataOnly = async () => {
+    try {
+      const data = await api.fetchPublicData();
+      
+      const usersById = new Map(data.users.map(u => [u.id, u]));
+      
+      const hydratedListings = data.listings.map(l => ({
+        ...l,
+        user: usersById.get(l.userId) || null,
+      })).filter(l => l.user !== null) as Listing[];
+
+      setUsers(data.users);
+      setListings(hydratedListings);
+      setBlogPosts(data.blogPosts);
+      setPages(data.pages);
+      setCategories(data.categories);
+      setSiteSettings(data.siteSettings);
+      
+      // Clear private data for logged-out users
+      setMessages([]);
+      setReports([]);
+
+    } catch (error: any) {
+      console.error("Failed to fetch public data from Firebase:", error);
+      if ((error as any).code === 'permission-denied') {
+          addToast('error', 'خطأ في الأذونات', 'فشل تحميل البيانات العامة. قد تكون هناك مشكلة في إعدادات الخادم.');
+      } else {
+          addToast('error', 'خطأ في الاتصال', 'لم نتمكن من جلب البيانات العامة من الخادم.');
+      }
+    }
+  };
+
   
   // This effect runs once on mount to check authentication state.
   useEffect(() => {
@@ -151,8 +186,10 @@ function AppContent() {
               const userProfile = await api.getUserProfile(firebaseUser.uid);
               if (userProfile?.status === 'active') {
                 setCurrentUser(userProfile);
+                await fetchData(); // Fetch ALL data for logged-in user
               } else {
                  // If user is found but not active (e.g., banned), log them out from the session.
+                 // The listener will re-run with firebaseUser=null
                  if (userProfile) {
                     await api.logout();
                  }
@@ -161,21 +198,20 @@ function AppContent() {
           } else {
               // User is signed out
               setCurrentUser(null);
+              await fetchPublicDataOnly(); // Fetch public data for logged-out user
           }
-          // After auth is checked, fetch the rest of the app data
-          await fetchData();
           setIsLoading(false); // Stop loading after auth check and data fetch
       });
 
       return () => unsubscribe(); // Cleanup subscription on unmount
     } else {
       // This case is unlikely if firebaseInitializationSuccess is true, but acts as a safeguard.
-      const loadWithoutAuth = async () => {
+      const loadPublicData = async () => {
           setIsLoading(true);
-          await fetchData();
+          await fetchPublicDataOnly();
           setIsLoading(false);
       };
-      loadWithoutAuth();
+      loadPublicData();
     }
   }, []);
 
