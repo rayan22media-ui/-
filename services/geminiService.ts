@@ -1,11 +1,36 @@
 
-
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Lazy initialization of the AI client to avoid crashing the app if API_KEY is not set.
+let ai: GoogleGenAI | null = null;
+
+function getAiInstance(): GoogleGenAI | null {
+  if (ai) {
+    return ai;
+  }
+  
+  // The API_KEY is injected by Vite at build time. If it's not present, this will be undefined.
+  if (process.env.API_KEY) {
+    try {
+      ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      return ai;
+    } catch (e) {
+        console.error("Failed to initialize GoogleGenAI:", e);
+        return null;
+    }
+  }
+  
+  console.warn("Gemini API key is not configured. The AI suggestion feature will be disabled.");
+  return null;
+}
 
 
 export const getBarterSuggestion = async (title: string, category: string, description: string): Promise<string> => {
+  const aiInstance = getAiInstance();
+  if (!aiInstance) {
+    return "ميزة الاقتراحات غير متاحة حالياً بسبب مشكلة في الإعدادات.";
+  }
+    
   try {
     const prompt = `
       أنا أعرض غرضًا للمقايضة في تطبيق سوري. أريد اقتراحات قصيرة ومناسبة لما يمكنني أن أطلبه في المقابل.
@@ -22,7 +47,7 @@ export const getBarterSuggestion = async (title: string, category: string, descr
       - مبلغ مالي يتم الاتفاق عليه
     `;
 
-    const response = await ai.models.generateContent({
+    const response = await aiInstance.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
     });
