@@ -131,7 +131,7 @@ function AppContent() {
       if (error.message === 'FIREBASE_NOT_INITIALIZED') {
           addToast('error', 'فشل تهيئة Firebase', 'لا يمكن الاتصال بالخادم. يرجى التحقق من إعدادات Firebase الخاصة بك.');
       } else if ((error as any).code === 'unavailable') {
-          addToast('warning', 'أنت غير متصل بالإنترنت', 'يتم عرض البيانات المحفوظة. قد لا تكون بعض الميزات متاحة.');
+          addToast('error', 'فشل الاتصال بالخادم', 'تعذر الوصول إلى قاعدة البيانات. تحقق من اتصالك بالإنترنت أو تأكد من صحة إعدادات الخادم وقواعد الأمان.');
       } else {
           addToast('error', 'خطأ في الاتصال', 'لم نتمكن من جلب البيانات من الخادم.');
       }
@@ -163,7 +163,7 @@ function AppContent() {
     } catch (error: any) {
       console.error("Failed to fetch public data from Firebase:", error);
       if ((error as any).code === 'unavailable') {
-        addToast('warning', 'أنت غير متصل بالإنترنت', 'يتم عرض البيانات المحفوظة حالياً.');
+        addToast('error', 'فشل الاتصال بالخادم', 'تعذر الوصول إلى قاعدة البيانات. تحقق من اتصالك بالإنترنت أو تأكد من صحة إعدادات الخادم وقواعد الأمان.');
       } else if ((error as any).code === 'permission-denied') {
           addToast('error', 'خطأ في الأذونات', 'فشل تحميل البيانات العامة. قد تكون هناك مشكلة في إعدادات الخادم.');
       } else {
@@ -175,48 +175,53 @@ function AppContent() {
   
   // This effect runs once on mount to check authentication state.
   useEffect(() => {
-    // If initialization failed, do nothing. The overlay is already showing.
     if (!firebaseInitializationSuccess) {
-        setIsLoading(false); // Ensure loading spinner doesn't run forever
+        setIsLoading(false);
         return;
     }
 
-    // Only subscribe if auth was initialized successfully
-    if (auth) {
-      const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
-          setIsLoading(true); // Start loading when auth state might change
-          if (firebaseUser) {
-              // User is signed in, fetch their profile data
-              const userProfile = await api.getUserProfile(firebaseUser.uid);
-              if (userProfile?.status === 'active') {
-                setCurrentUser(userProfile);
-                await fetchData(); // Fetch ALL data for logged-in user
-              } else {
-                 // If user is found but not active (e.g., banned), log them out from the session.
-                 // The listener will re-run with firebaseUser=null
-                 if (userProfile) {
-                    await api.logout();
-                 }
-                 setCurrentUser(null);
-              }
-          } else {
-              // User is signed out
-              setCurrentUser(null);
-              await fetchPublicDataOnly(); // Fetch public data for logged-out user
-          }
-          setIsLoading(false); // Stop loading after auth check and data fetch
-      });
-
-      return () => unsubscribe(); // Cleanup subscription on unmount
-    } else {
-      // This case is unlikely if firebaseInitializationSuccess is true, but acts as a safeguard.
-      const loadPublicData = async () => {
-          setIsLoading(true);
-          await fetchPublicDataOnly();
-          setIsLoading(false);
-      };
-      loadPublicData();
+    if (!auth) {
+        const loadPublicData = async () => {
+            setIsLoading(true);
+            try {
+                await fetchPublicDataOnly();
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        loadPublicData();
+        return;
     }
+
+    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
+        setIsLoading(true);
+        try {
+            if (firebaseUser) {
+                const userProfile = await api.getUserProfile(firebaseUser.uid);
+                if (userProfile?.status === 'active') {
+                    setCurrentUser(userProfile);
+                    await fetchData();
+                } else {
+                    if (userProfile) {
+                        addToast('error', 'الحساب محظور', 'تم تسجيل خروجك لأن حسابك غير نشط.');
+                        await api.logout();
+                    }
+                    setCurrentUser(null);
+                    // onAuthStateChanged will re-run with firebaseUser=null, which will fetch public data.
+                }
+            } else {
+                setCurrentUser(null);
+                await fetchPublicDataOnly();
+            }
+        } catch (error) {
+            console.error("An error occurred during auth state processing:", error);
+            // The specific fetching functions already show toasts, so this is a safeguard.
+        } finally {
+            setIsLoading(false);
+        }
+    });
+
+    return () => unsubscribe();
   }, []);
 
 
