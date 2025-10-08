@@ -1,18 +1,12 @@
 
-// FIX: Add global type declaration for import.meta.env to handle all Vite environment variables
-// and resolve TypeScript errors, replacing the failing reference to 'vite/client'.
+// FIX: Manually declare Vite's import.meta.env types as a workaround for project configuration issues
+// that prevent `/// <reference types="vite/client" />` from resolving correctly.
 declare global {
   interface ImportMeta {
-    readonly env: {
-      readonly VITE_API_KEY: string;
-      readonly VITE_FIREBASE_API_KEY: string;
-      readonly VITE_FIREBASE_AUTH_DOMAIN: string;
-      readonly VITE_FIREBASE_PROJECT_ID: string;
-      readonly VITE_FIREBASE_STORAGE_BUCKET: string;
-      readonly VITE_FIREBASE_MESSAGING_SENDER_ID: string;
-      readonly VITE_FIREBASE_APP_ID: string;
-      readonly VITE_FIREBASE_MEASUREMENT_ID: string;
-    }
+    readonly env: ImportMetaEnv;
+  }
+  interface ImportMetaEnv {
+    readonly VITE_API_KEY: string;
   }
 }
 
@@ -26,10 +20,14 @@ function getAiInstance(): GoogleGenAI | null {
     return ai;
   }
   
-  // The API_KEY is injected by Vite at build time via import.meta.env.
-  if (import.meta.env.VITE_API_KEY) {
+  // Use import.meta.env, which is the standard Vite way to access environment variables.
+  // FIX: Removed optional chaining as the env variable types are now declared globally.
+  const apiKey = import.meta.env.VITE_API_KEY;
+  
+  // Check if the API key is present.
+  if (apiKey) {
     try {
-      ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
+      ai = new GoogleGenAI({ apiKey });
       return ai;
     } catch (e) {
         console.error("Failed to initialize GoogleGenAI:", e);
