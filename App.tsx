@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Page, User, Listing, Message, Report, BlogPost, PageContent, AdminAction, RegistrationData } from './types';
-import { MOCK_USERS_DATA, MOCK_LISTINGS_DATA, MOCK_MESSAGES_DATA, MOCK_REPORTS_DATA, MOCK_BLOG_POSTS_DATA, MOCK_PAGES_DATA, INITIAL_CATEGORIES } from './constants';
 import { ToastProvider, useToast } from './components/Toast';
+import { api } from './services/api';
 
 import Header from './components/Header';
 import HomePage from './components/pages/HomePage';
@@ -62,26 +62,43 @@ function useStickyState<T>(defaultValue: T, key: string): [T, React.Dispatch<Rea
 
 
 function AppContent() {
+  // UI and Session state can remain sticky
   const [currentPage, setCurrentPage] = useStickyState<Page>(Page.Home, 'currentPage');
-  const [users, setUsers] = useStickyState<User[]>(MOCK_USERS_DATA, 'users');
   const [currentUser, setCurrentUser] = useStickyState<User | null>(null, 'currentUser');
-  const [listings, setListings] = useStickyState<Listing[]>(MOCK_LISTINGS_DATA, 'listings');
-  const [messages, setMessages] = useStickyState<Message[]>(MOCK_MESSAGES_DATA, 'messages');
-  const [reports, setReports] = useStickyState<Report[]>(MOCK_REPORTS_DATA, 'reports');
-  const [blogPosts, setBlogPosts] = useStickyState<BlogPost[]>(MOCK_BLOG_POSTS_DATA, 'blogPosts');
-  const [pages, setPages] = useStickyState<PageContent[]>(MOCK_PAGES_DATA, 'pages');
-  const [categories, setCategories] = useStickyState<string[]>(INITIAL_CATEGORIES, 'categories');
-  const [siteSettings, setSiteSettings] = useStickyState<SiteSettings>({ logoUrl: '', customFontName: '', customFontBase64: '' }, 'siteSettings');
   const [activeConversation, setActiveConversation] = useStickyState<{ partner: User; listing: Listing } | null>(null, 'activeConversation');
+  
+  // Application data state, now fetched from the API service
+  const [users, setUsers] = useState<User[]>([]);
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [blogPosts, setBlogPosts] = useState<BlogPost[]>([]);
+  const [pages, setPages] = useState<PageContent[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [siteSettings, setSiteSettings] = useState<SiteSettings>({ logoUrl: '', customFontName: '', customFontBase64: '' });
+
   const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
   const [selectedPageSlug, setSelectedPageSlug] = useState<string | null>(null);
   const [selectedListingId, setSelectedListingId] = useState<number | null>(null);
-
 
   // State for UI enhancements
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const { addToast } = useToast();
+
+  // Effect to fetch all data from the service layer on initial load
+  useEffect(() => {
+    api.fetchAllData().then(data => {
+        setUsers(data.users);
+        setListings(data.listings);
+        setMessages(data.messages);
+        setReports(data.reports);
+        setBlogPosts(data.blogPosts);
+        setPages(data.pages);
+        setCategories(data.categories);
+        setSiteSettings(data.siteSettings);
+    });
+  }, []);
 
   // Effect to handle scroll detection for dynamic header
   useEffect(() => {
@@ -158,36 +175,32 @@ function AppContent() {
         }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run only on initial mount to handle deep links.
+  }, [listings]); // Depend on listings to ensure data is loaded before checking
   
   const handleLogin = (email: string, password: string): boolean => {
-    const user = users.find(u => u.email === email && u.password === password);
-    if (user && user.status === 'active') {
-      setCurrentUser(user);
-      addToast('success', 'أهلاً بعودتك!', `تم تسجيل دخولك بنجاح, ${user.name}.`);
-      handleNavigate(Page.Home);
-      return true;
-    }
-    return false;
+    api.login(email, password).then(user => {
+      if (user) {
+        setCurrentUser(user);
+        addToast('success', 'أهلاً بعودتك!', `تم تسجيل دخولك بنجاح, ${user.name}.`);
+        handleNavigate(Page.Home);
+      } else {
+         addToast('error', 'فشل الدخول', 'البريد الإلكتروني أو كلمة المرور غير صحيحة.');
+      }
+    });
+    return true; // Assume async operation, UI handles feedback
   };
 
   const handleRegister = (newUserData: RegistrationData): boolean => {
-    if (users.some(u => u.email === newUserData.email)) {
-      addToast('error', 'فشل التسجيل', 'هذا البريد الإلكتروني مسجل بالفعل.');
-      return false;
-    }
-    
-    const newUser: User = {
-        ...newUserData,
-        id: Math.max(...users.map(u => u.id), 0) + 1,
-        role: 'user',
-        status: 'active',
-    };
-    
-    setUsers(prev => [...prev, newUser]);
-    setCurrentUser(newUser);
-    addToast('success', 'أهلاً بك!', 'تم إنشاء حسابك بنجاح.');
-    handleNavigate(Page.Home);
+    api.register(newUserData).then(user => {
+        if(user) {
+            setUsers(prev => [...prev, user]);
+            setCurrentUser(user);
+            addToast('success', 'أهلاً بك!', 'تم إنشاء حسابك بنجاح.');
+            handleNavigate(Page.Home);
+        } else {
+            addToast('error', 'فشل التسجيل', 'هذا البريد الإلكتروني مسجل بالفعل.');
+        }
+    });
     return true;
   };
 
@@ -201,16 +214,11 @@ function AppContent() {
           addToast('warning', 'مطلوب تسجيل الدخول', 'يجب تسجيل الدخول لإضافة عرض.');
           return;
       }
-      const newListing: Listing = {
-          ...newListingData,
-          id: Math.max(...listings.map(l => l.id), 0) + 1,
-          user: currentUser,
-          createdAt: new Date(),
-          status: 'pending' // Listings need admin approval
-      };
-      setListings(prev => [...prev, newListing]);
-      addToast('info', 'تم استلام عرضك', 'تمت إضافة عرضك بنجاح، وهو الآن قيد المراجعة.');
-      handleNavigate(Page.Profile);
+      api.addListing(newListingData, currentUser).then(newListing => {
+          setListings(prev => [...prev, newListing]);
+          addToast('info', 'تم استلام عرضك', 'تمت إضافة عرضك بنجاح، وهو الآن قيد المراجعة.');
+          handleNavigate(Page.Profile);
+      });
   };
   
   const handleSelectListing = (listing: Listing) => {
@@ -219,18 +227,7 @@ function AppContent() {
 
   const handleStartConversation = (partner: User, listing: Listing) => {
       if (currentUser) {
-          const updatedMessages = messages.map(m => {
-              if (
-                  m.receiverId === currentUser.id &&
-                  m.senderId === partner.id &&
-                  m.listingId === listing.id &&
-                  !m.read
-              ) {
-                  return { ...m, read: true };
-              }
-              return m;
-          });
-          setMessages(updatedMessages);
+         api.markMessagesAsRead(currentUser, partner, listing).then(setMessages);
       }
       setActiveConversation({ partner, listing });
       handleNavigate(Page.Messages);
@@ -238,18 +235,9 @@ function AppContent() {
 
   const handleSendMessage = (type: 'text' | 'image' | 'audio', content: string) => {
       if (!currentUser || !activeConversation) return;
-
-      const newMessage: Message = {
-          id: Math.max(0, ...messages.map(m => m.id)) + 1,
-          senderId: currentUser.id,
-          receiverId: activeConversation.partner.id,
-          listingId: activeConversation.listing.id,
-          content,
-          type,
-          createdAt: new Date(),
-          read: false,
-      };
-      setMessages(prev => [...prev, newMessage]);
+      api.sendMessage(type, content, currentUser, activeConversation).then(newMessage => {
+          setMessages(prev => [...prev, newMessage]);
+      });
   };
   
   const handleBackToInbox = () => {
@@ -261,134 +249,62 @@ function AppContent() {
           addToast('warning', 'مطلوب تسجيل الدخول', 'يجب تسجيل الدخول للإبلاغ عن عرض.');
           return;
       }
-      const newReport: Report = {
-          id: Math.max(0, ...reports.map(r => r.id)) + 1,
-          listingId,
-          reporterId: currentUser.id,
-          reason,
-          createdAt: new Date(),
-          status: 'new'
-      };
-      setReports(prev => [...prev, newReport]);
-      addToast('success', 'تم إرسال البلاغ', 'شكراً لك، تم إرسال بلاغك للإدارة وسنراجعه قريباً.');
+      api.reportListing(listingId, reason, currentUser).then(newReport => {
+          setReports(prev => [...prev, newReport]);
+          addToast('success', 'تم إرسال البلاغ', 'شكراً لك، تم إرسال بلاغك للإدارة وسنراجعه قريباً.');
+      });
   };
 
   const handleUpdateUserListingStatus = (listingId: number, status: Listing['status']) => {
-    if (!currentUser) {
-        addToast('error', 'غير مصرح به', 'يجب عليك تسجيل الدخول لتغيير حالة العرض.');
-        return;
-    }
-
+    if (!currentUser) { addToast('error', 'غير مصرح به', 'يجب عليك تسجيل الدخول لتغيير حالة العرض.'); return; }
     const listingToUpdate = listings.find(l => l.id === listingId);
-
-    if (!listingToUpdate) {
-        addToast('error', 'خطأ', 'العرض غير موجود.');
-        return;
-    }
-
-    if (listingToUpdate.user.id !== currentUser.id) {
-        addToast('error', 'غير مصرح به', 'لا يمكنك تعديل هذا العرض.');
-        return;
-    }
-
-    setListings(listings.map(listing => listing.id === listingId ? { ...listing, status } : listing));
+    if (!listingToUpdate) { addToast('error', 'خطأ', 'العرض غير موجود.'); return; }
+    if (listingToUpdate.user.id !== currentUser.id) { addToast('error', 'غير مصرح به', 'لا يمكنك تعديل هذا العرض.'); return; }
     
-    if (status === 'traded') {
-        addToast('success', 'تم التحديث', 'تم تغيير حالة عرضك إلى "تمت المقايضة".');
-    } else if (status === 'active') {
-        addToast('success', 'تم التحديث', 'تم إعادة عرضك وهو الآن نشط.');
-    }
+    api.updateUserListingStatus(listingId, status).then(updatedListing => {
+        if(updatedListing) {
+            setListings(listings.map(l => l.id === listingId ? updatedListing : l));
+            if (status === 'traded') addToast('success', 'تم التحديث', 'تم تغيير حالة عرضك إلى "تمت المقايضة".');
+            else if (status === 'active') addToast('success', 'تم التحديث', 'تم إعادة عرضك وهو الآن نشط.');
+        }
+    });
   };
   
   const handleUpdateListing = (listingId: number, updatedData: Omit<Listing, 'id' | 'user' | 'createdAt' | 'status'>) => {
-    if (!currentUser) {
-        addToast('error', 'غير مصرح به', 'يجب تسجيل الدخول لتعديل العرض.');
-        return;
-    }
+    if (!currentUser) { addToast('error', 'غير مصرح به', 'يجب تسجيل الدخول لتعديل العرض.'); return; }
     const listingIndex = listings.findIndex(l => l.id === listingId);
-    if (listingIndex === -1) {
-        addToast('error', 'خطأ', 'العرض غير موجود.');
-        return;
-    }
-    if (listings[listingIndex].user.id !== currentUser.id) {
-        addToast('error', 'غير مصرح به', 'لا تملك صلاحية تعديل هذا العرض.');
-        return;
-    }
+    if (listingIndex === -1) { addToast('error', 'خطأ', 'العرض غير موجود.'); return; }
+    if (listings[listingIndex].user.id !== currentUser.id) { addToast('error', 'غير مصرح به', 'لا تملك صلاحية تعديل هذا العرض.'); return; }
 
-    const updatedListings = [...listings];
-    const originalListing = updatedListings[listingIndex];
-
-    updatedListings[listingIndex] = {
-        ...originalListing,
-        ...updatedData,
-        status: 'pending' // Set status to pending for review
-    };
-
-    setListings(updatedListings);
-    addToast('info', 'تم إرسال التعديلات', 'تم حفظ تعديلاتك، وهي الآن قيد المراجعة.');
+    api.updateListing(listingId, updatedData).then(updatedListing => {
+        if(updatedListing) {
+            setListings(listings.map(l => l.id === listingId ? updatedListing : l));
+            addToast('info', 'تم إرسال التعديلات', 'تم حفظ تعديلاتك، وهي الآن قيد المراجعة.');
+        }
+    });
   };
 
   const handleAdminAction = (action: AdminAction, payload: any) => {
-      switch (action) {
-          case 'UPDATE_USER_STATUS':
-              setUsers(users.map(user => user.id === payload.id ? { ...user, status: payload.status } : user));
-              break;
-          case 'UPDATE_LISTING_STATUS':
-              setListings(listings.map(listing => listing.id === payload.id ? { ...listing, status: payload.status } : listing));
-              break;
-          case 'UPDATE_REPORT_STATUS':
-              setReports(reports.map(report => report.id === payload.id ? { ...report, status: payload.status } : report));
-              break;
-          case 'CREATE_BLOG_POST': {
-              const newPost: BlogPost = {
-                  ...payload,
-                  id: Math.max(0, ...blogPosts.map(p => p.id)) + 1,
-                  authorId: currentUser!.id,
-                  createdAt: new Date(),
-              };
-              setBlogPosts(prev => [newPost, ...prev]);
-              break;
-          }
-          case 'UPDATE_BLOG_POST':
-              setBlogPosts(blogPosts.map(post => post.id === payload.id ? { ...post, ...payload } : post));
-              break;
-          case 'DELETE_BLOG_POST':
-              setBlogPosts(blogPosts.filter(post => post.id !== payload.id));
-              break;
-          case 'DELETE_LISTING':
-              setListings(listings.filter(listing => listing.id !== payload.id));
-              addToast('info', 'تم الحذف', 'تم حذف العرض بنجاح.');
-              break;
-          case 'CREATE_PAGE': {
-              const newPage: PageContent = {
-                  ...payload,
-                  id: Math.max(0, ...pages.map(p => p.id)) + 1,
-                  createdAt: new Date(),
-                  updatedAt: new Date(),
-              };
-              setPages(prev => [newPage, ...prev]);
-              break;
-          }
-          case 'UPDATE_PAGE': {
-              const updatedPage = { ...payload, updatedAt: new Date() };
-              setPages(pages.map(page => page.id === updatedPage.id ? updatedPage : page));
-              break;
-          }
-          case 'DELETE_PAGE':
-              setPages(pages.filter(page => page.id !== payload.id));
-              break;
-          case 'ADD_CATEGORY':
-              if (payload.name && !categories.includes(payload.name)) {
-                  setCategories(prev => [...prev, payload.name]);
-              }
-              break;
-          case 'UPDATE_SITE_SETTINGS':
-              setSiteSettings(prev => ({ ...prev, ...payload }));
-              addToast('success', 'تم الحفظ', 'تم حفظ إعدادات الموقع بنجاح.');
-              break;
-          default:
-              console.warn("Unhandled admin action:", action);
-      }
+      if (!currentUser) return;
+      api.performAdminAction(action, payload, currentUser).then(result => {
+           switch (action) {
+              case 'UPDATE_USER_STATUS': setUsers(result); break;
+              case 'UPDATE_LISTING_STATUS':
+              case 'DELETE_LISTING': setListings(result); break;
+              case 'UPDATE_REPORT_STATUS': setReports(result); break;
+              case 'CREATE_BLOG_POST':
+              case 'UPDATE_BLOG_POST':
+              case 'DELETE_BLOG_POST': setBlogPosts(result); break;
+              case 'CREATE_PAGE':
+              case 'UPDATE_PAGE':
+              case 'DELETE_PAGE': setPages(result); break;
+              case 'ADD_CATEGORY': setCategories(result); break;
+              case 'UPDATE_SITE_SETTINGS':
+                  setSiteSettings(result);
+                  addToast('success', 'تم الحفظ', 'تم حفظ إعدادات الموقع بنجاح.');
+                  break;
+            }
+      });
   };
 
   const unreadMessagesCount = currentUser

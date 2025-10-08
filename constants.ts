@@ -16,30 +16,27 @@ export const BLOG_CATEGORIES: string[] = [
 // --- MOCK DATA ---
 // We define base users and listings here to be used in other mock data sets
 
-const MOCK_USERS_BASE: User[] = [
+export const MOCK_USERS_BASE: User[] = [
   { id: 1, name: 'علي الأحمد', email: 'ali@example.com', password: '123', phone: '0912345678', avatarUrl: 'https://picsum.photos/seed/user1/200/200', governorate: 'دمشق', role: 'user', status: 'active' },
   { id: 2, name: 'فاطمة الزهراء', email: 'fatima@example.com', password: '123', phone: '0987654321', avatarUrl: 'https://picsum.photos/seed/user2/200/200', governorate: 'حلب', role: 'user', status: 'active' },
   { id: 3, name: 'مدير النظام', email: 'admin@win.sy', password: 'admin123', phone: '0933333333', avatarUrl: 'https://picsum.photos/seed/admin/200/200', governorate: 'دمشق', role: 'admin', status: 'active' },
   { id: 4, name: 'سامر المحمد', email: 'samer@example.com', password: '123', phone: '0944444444', avatarUrl: 'https://picsum.photos/seed/user4/200/200', governorate: 'حمص', role: 'user', status: 'banned' },
 ];
 
-const MOCK_LISTINGS_BASE: Listing[] = [
+export const MOCK_LISTINGS_BASE: Listing[] = [
   { id: 1, user: MOCK_USERS_BASE[0], title: 'لابتوب Dell XPS 15 مستعمل', description: 'لابتوب بحالة ممتازة، معالج i7، رام 16 جيجا، SSD 512. للمقايضة على هاتف حديث.', category: 'إلكترونيات', governorate: 'دمشق', images: ['https://picsum.photos/seed/laptop/800/600'], wanted: 'هاتف iPhone 13 أو أحدث', createdAt: new Date('2023-10-26T10:00:00Z'), status: 'active' },
   { id: 2, user: MOCK_USERS_BASE[1], title: 'مجموعة كتب وروايات عالمية', description: 'مجموعة من 20 رواية عالمية مترجمة بحالة جديدة. أبحث عن آلة صنع قهوة.', category: 'كتب وهوايات', governorate: 'حلب', images: ['https://picsum.photos/seed/books/800/600'], wanted: 'آلة صنع قهوة نوع جيد', createdAt: new Date('2023-10-25T14:30:00Z'), status: 'active' },
   { id: 3, user: MOCK_USERS_BASE[0], title: 'دراجة هوائية رياضية', description: 'دراجة بحالة جيدة جداً، استخدام قليل. للمقايضة على جهاز لوحي.', category: 'سيارات ومركبات', governorate: 'دمشق', images: ['https://picsum.photos/seed/bike/800/600'], wanted: 'جهاز لوحي (تابلت)', createdAt: new Date('2023-10-24T09:00:00Z'), status: 'traded' },
   { id: 4, user: MOCK_USERS_BASE[1], title: 'كاميرا كانون احترافية', description: 'كاميرا Canon EOS 5D Mark IV مع عدسة 24-105mm. بحالة ممتازة. أبحث عن لابتوب MacBook Pro.', category: 'إلكترونيات', governorate: 'اللاذقية', images: ['https://picsum.photos/seed/camera/800/600'], wanted: 'MacBook Pro M1', createdAt: new Date('2023-10-28T12:00:00Z'), status: 'pending' },
 ];
 
-export const MOCK_USERS_DATA: User[] = MOCK_USERS_BASE;
-export const MOCK_LISTINGS_DATA: Listing[] = MOCK_LISTINGS_BASE;
-
-export const MOCK_MESSAGES_DATA: Message[] = [
+export const MOCK_MESSAGES_BASE: Message[] = [
     { id: 1, senderId: 2, receiverId: 1, listingId: 1, type: 'text', content: 'مرحباً، هل ما زال اللابتوب متوفراً؟', createdAt: new Date('2023-10-26T11:00:00Z'), read: false },
     { id: 2, senderId: 1, receiverId: 2, listingId: 1, type: 'text', content: 'أهلاً، نعم متوفر.', createdAt: new Date('2023-10-26T11:05:00Z'), read: true },
     { id: 3, senderId: 2, receiverId: 1, listingId: 1, type: 'text', content: 'ما هي حالة البطارية؟', createdAt: new Date('2023-10-26T11:10:00Z'), read: false },
 ];
 
-export const MOCK_BLOG_POSTS_DATA: BlogPost[] = [
+export const MOCK_BLOG_POSTS_BASE: BlogPost[] = [
     {
       id: 1,
       title: '5 نصائح لمقايضة ناجحة وآمنة',
@@ -62,12 +59,12 @@ export const MOCK_BLOG_POSTS_DATA: BlogPost[] = [
     }
 ];
 
-export const MOCK_REPORTS_DATA: Report[] = [
+export const MOCK_REPORTS_BASE: Report[] = [
     { id: 1, listingId: 2, reporterId: 1, reason: 'المستخدم غير جاد ولا يرد على الرسائل.', createdAt: new Date('2023-10-27T18:00:00Z'), status: 'new' },
     { id: 2, listingId: 3, reporterId: 2, reason: 'العرض مبالغ فيه جداً والمقابل المطلوب غير منطقي.', createdAt: new Date('2023-10-26T11:30:00Z'), status: 'resolved' },
 ];
 
-export const MOCK_PAGES_DATA: PageContent[] = [
+export const MOCK_PAGES_BASE: PageContent[] = [
     {
         id: 1,
         title: 'من نحن',
