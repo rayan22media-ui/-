@@ -1,5 +1,4 @@
 import { initializeApp } from "firebase/app";
-// FIX: Import getAuth as a named export from firebase/auth.
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
@@ -15,11 +14,20 @@ const firebaseConfig = {
   measurementId: process.env.FIREBASE_MEASUREMENT_ID
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase safely
+let auth = null;
+let db = null;
+let storage = null;
 
-// Export the services you need
-// FIX: Call getAuth directly.
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const storage = getStorage(app);
+try {
+  // initializeApp will throw an error if the config is bad, specifically the API key.
+  const app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+  storage = getStorage(app);
+} catch (error) {
+  console.error("Firebase initialization failed. This is likely due to missing or incorrect Firebase environment variables (like VITE_FIREBASE_API_KEY). Please check your .env file. Firebase-related features will be disabled.", error);
+}
+
+// Export the services you need. They will be null if initialization failed.
+export { auth, db, storage };

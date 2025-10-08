@@ -101,22 +101,34 @@ function AppContent() {
   
   // This effect runs once on mount to check authentication state.
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
-        setIsLoading(true); // Start loading when auth state might change
-        if (firebaseUser) {
-            // User is signed in, fetch their profile data
-            const userProfile = await api.getUserProfile(firebaseUser.uid);
-            setCurrentUser(userProfile);
-        } else {
-            // User is signed out
-            setCurrentUser(null);
-        }
-        // After auth is checked, fetch the rest of the app data
-        await fetchData();
-        setIsLoading(false); // Stop loading after auth check and data fetch
-    });
+    // Only subscribe if auth was initialized successfully
+    if (auth) {
+      const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
+          setIsLoading(true); // Start loading when auth state might change
+          if (firebaseUser) {
+              // User is signed in, fetch their profile data
+              const userProfile = await api.getUserProfile(firebaseUser.uid);
+              setCurrentUser(userProfile);
+          } else {
+              // User is signed out
+              setCurrentUser(null);
+          }
+          // After auth is checked, fetch the rest of the app data
+          await fetchData();
+          setIsLoading(false); // Stop loading after auth check and data fetch
+      });
 
-    return () => unsubscribe(); // Cleanup subscription on unmount
+      return () => unsubscribe(); // Cleanup subscription on unmount
+    } else {
+      // If Firebase Auth is not available, we can't check for a logged-in user.
+      // We'll proceed without a user and just fetch public data.
+      const loadWithoutAuth = async () => {
+          setIsLoading(true);
+          await fetchData();
+          setIsLoading(false);
+      };
+      loadWithoutAuth();
+    }
   }, []);
 
 
