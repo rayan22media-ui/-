@@ -98,7 +98,6 @@ function AppContent() {
   const [siteSettings, setSiteSettings] = useState<SiteSettings>({ logoUrl: '', customFontName: '', customFontBase64: '' });
   
   const [isLoading, setIsLoading] = useState(true);
-  // FIX: Added state to prevent auth listener from conflicting with active login/register flows.
   const [isProcessingAuth, setIsProcessingAuth] = useState(false);
 
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
@@ -172,7 +171,7 @@ function AppContent() {
   };
 
   
-  // This effect is now ONLY for session restoration on page load/refresh.
+  // FIX: Removed `isProcessingAuth` from the dependency array. This listener should only be set up once.
   useEffect(() => {
     if (!firebaseInitializationSuccess || !auth) {
         setIsLoading(false);
@@ -180,7 +179,7 @@ function AppContent() {
     }
 
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
-        // FIX: If we are actively logging in or registering, let the handler function control the state.
+        // If we are actively logging in or registering, let the handler function control the state to prevent race conditions.
         if (isProcessingAuth) return;
 
         setIsLoading(true);
@@ -214,9 +213,8 @@ function AppContent() {
     });
 
     return () => unsubscribe();
-  }, [isProcessingAuth]); // Depend on isProcessingAuth to avoid race conditions.
+  }, []); // An empty dependency array ensures this runs only once on mount.
   
-    // FIX: Changed dependency array to [] to ensure the listener is set up once and for all users.
     useEffect(() => {
         if (!db) return;
         const settingsDocRef = doc(db, 'site_data', 'settings');
@@ -285,7 +283,6 @@ function AppContent() {
     }
   }, [listings, isLoading]);
   
-  // FIX: Reworked to be the source of truth for login state changes, avoiding the auth listener race condition.
   const handleLogin = async (email: string, password: string): Promise<boolean> => {
     setIsProcessingAuth(true);
     try {
@@ -314,7 +311,6 @@ function AppContent() {
     }
   };
 
-  // FIX: Reworked to be the source of truth for registration state changes, avoiding the auth listener race condition.
   const handleRegister = async (newUserData: RegistrationData): Promise<boolean> => {
     setIsProcessingAuth(true);
     try {
