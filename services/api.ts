@@ -67,7 +67,6 @@ export const api = {
             fetchCollection<BlogPost>('blogPosts'),
             fetchCollection<PageContent>('pages'),
             getDoc(doc(db, 'site_data', 'categories')).then(d => d.exists() ? d.data().list : INITIAL_CATEGORIES),
-            getDoc(doc(db, 'site_data', 'settings')).then(d => d.exists() ? d.data() as SiteSettings : { logoUrl: '' }),
         ];
         
         // Batch requests for user profiles, respecting Firestore's 10-item limit for 'in' queries.
@@ -81,7 +80,7 @@ export const api = {
         }
         
         // Execute all fetches in parallel.
-        const [blogPosts, pages, categories, siteSettings, ...userQuerySnapshots] = await Promise.all([...otherDataPromises, ...userBatchesPromises]);
+        const [blogPosts, pages, categories, ...userQuerySnapshots] = await Promise.all([...otherDataPromises, ...userBatchesPromises]);
         
         // Process the user query results.
         const users: User[] = [];
@@ -93,7 +92,7 @@ export const api = {
             });
         });
 
-        return { users, listings, blogPosts, pages, categories, siteSettings };
+        return { users, listings, blogPosts, pages, categories };
     },
     
     async fetchAllData() {
@@ -101,7 +100,7 @@ export const api = {
             throw new Error(FIREBASE_INIT_ERROR);
         }
         // Fetch all data collections in parallel for efficiency.
-        const [users, listings, messages, reports, blogPosts, pages, categories, siteSettings] = await Promise.all([
+        const [users, listings, messages, reports, blogPosts, pages, categories] = await Promise.all([
             fetchCollection<User>('users'),
             fetchCollection<ListingData>('listings'),
             fetchCollection<Message>('messages'),
@@ -109,9 +108,8 @@ export const api = {
             fetchCollection<BlogPost>('blogPosts'),
             fetchCollection<PageContent>('pages'),
             getDoc(doc(db, 'site_data', 'categories')).then(d => d.exists() ? d.data().list : INITIAL_CATEGORIES),
-            getDoc(doc(db, 'site_data', 'settings')).then(d => d.exists() ? d.data() as SiteSettings : { logoUrl: '' }),
         ]);
-        return { users, listings, messages, reports, blogPosts, pages, categories, siteSettings };
+        return { users, listings, messages, reports, blogPosts, pages, categories };
     },
 
     // --- Auth & Users ---
@@ -213,28 +211,33 @@ export const api = {
     async addListing(newListingData: Omit<ListingData, 'id' | 'userId' | 'createdAt' | 'status'>, currentUser: User): Promise<ListingData> {
         if (!db || !storage) throw new Error(FIREBASE_INIT_ERROR);
         
-        let finalImageUrl = '';
-        if (newListingData.images && newListingData.images[0]?.startsWith('data:image')) {
-            const listingImageRef = ref(storage, `listings/${currentUser.id}_${Date.now()}`);
-            await uploadString(listingImageRef, newListingData.images[0], 'data_url');
-            finalImageUrl = await getDownloadURL(listingImageRef);
+        try {
+            let finalImageUrl = '';
+            if (newListingData.images && newListingData.images[0]?.startsWith('data:image')) {
+                const listingImageRef = ref(storage, `listings/${currentUser.id}_${Date.now()}`);
+                await uploadString(listingImageRef, newListingData.images[0], 'data_url');
+                finalImageUrl = await getDownloadURL(listingImageRef);
+            }
+    
+            const dataToSave = {
+                title: newListingData.title,
+                description: newListingData.description,
+                category: newListingData.category,
+                governorate: newListingData.governorate,
+                wanted: newListingData.wanted,
+                images: finalImageUrl ? [finalImageUrl] : [],
+                userId: currentUser.id,
+                createdAt: serverTimestamp(),
+                status: 'pending' as const
+            };
+    
+            const docRef = await addDoc(collection(db, 'listings'), dataToSave);
+            const newDoc = await getDoc(docRef);
+            return docToType<ListingData>(newDoc);
+        } catch (error) {
+            console.error("Error in api.addListing:", error);
+            throw error; // Re-throw to be caught by the UI layer
         }
-
-        const dataToSave = {
-            title: newListingData.title,
-            description: newListingData.description,
-            category: newListingData.category,
-            governorate: newListingData.governorate,
-            wanted: newListingData.wanted,
-            images: finalImageUrl ? [finalImageUrl] : [],
-            userId: currentUser.id,
-            createdAt: serverTimestamp(),
-            status: 'pending' as const
-        };
-
-        const docRef = await addDoc(collection(db, 'listings'), dataToSave);
-        const newDoc = await getDoc(docRef);
-        return docToType<ListingData>(newDoc);
     },
     
     async updateListing(listingId: string, updatedData: Omit<ListingData, 'id' | 'userId' | 'createdAt' | 'status'>): Promise<ListingData | null> {

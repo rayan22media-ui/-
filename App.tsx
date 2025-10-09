@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Page, User, Listing, Message, Report, BlogPost, PageContent, AdminAction, RegistrationData, ListingData, SiteSettings } from './types';
 import { ToastProvider, useToast } from './components/Toast';
 import { api } from './services/api';
-import { auth, firebaseInitializationSuccess } from './src/firebaseConfig'; // Import auth and the new flag
+import { auth, firebaseInitializationSuccess, db } from './src/firebaseConfig'; // Import auth, db, and the new flag
+import { doc, onSnapshot } from "firebase/firestore";
 
 import Header from './components/Header';
 import HomePage from './components/pages/HomePage';
@@ -84,7 +85,6 @@ VITE_API_KEY="..."`}
 
 function AppContent() {
   const [currentPage, setCurrentPage] = useStickyState<Page>(Page.Home, 'currentPage');
-  // Use regular useState for currentUser; Firebase will handle persistence.
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeConversation, setActiveConversation] = useStickyState<{ partner: User; listing: Listing } | null>(null, 'activeConversation');
   
@@ -97,8 +97,9 @@ function AppContent() {
   const [categories, setCategories] = useState<string[]>([]);
   const [siteSettings, setSiteSettings] = useState<SiteSettings>({ logoUrl: '', customFontName: '', customFontBase64: '' });
   
-  // isLoading now tracks both auth check and data fetching
   const [isLoading, setIsLoading] = useState(true);
+  // FIX: Added state to prevent auth listener from conflicting with active login/register flows.
+  const [isProcessingAuth, setIsProcessingAuth] = useState(false);
 
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [selectedPageSlug, setSelectedPageSlug] = useState<string | null>(null);
@@ -126,7 +127,6 @@ function AppContent() {
       setBlogPosts(data.blogPosts);
       setPages(data.pages);
       setCategories(data.categories);
-      setSiteSettings(data.siteSettings);
     } catch (error: any) {
       console.error("Failed to fetch data from Firebase:", error);
       if (error.message === 'FIREBASE_NOT_INITIALIZED') {
@@ -155,9 +155,7 @@ function AppContent() {
       setBlogPosts(data.blogPosts);
       setPages(data.pages);
       setCategories(data.categories);
-      setSiteSettings(data.siteSettings);
       
-      // Clear private data for logged-out users
       setMessages([]);
       setReports([]);
 
@@ -174,56 +172,66 @@ function AppContent() {
   };
 
   
-  // This effect runs once on mount to check authentication state.
+  // This effect is now ONLY for session restoration on page load/refresh.
   useEffect(() => {
-    if (!firebaseInitializationSuccess) {
+    if (!firebaseInitializationSuccess || !auth) {
         setIsLoading(false);
         return;
     }
 
-    if (!auth) {
-        const loadPublicData = async () => {
-            setIsLoading(true);
-            try {
-                await fetchPublicDataOnly();
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        loadPublicData();
-        return;
-    }
-
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
+        // FIX: If we are actively logging in or registering, let the handler function control the state.
+        if (isProcessingAuth) return;
+
         setIsLoading(true);
         try {
             if (firebaseUser) {
                 const userProfile = await api.getUserProfile(firebaseUser.uid);
                 if (userProfile?.status === 'active') {
                     setCurrentUser(userProfile);
-                    await fetchData();
+                    await fetchData(); // Fetch data for the restored session
                 } else {
-                    if (userProfile) {
+                    if (userProfile) { // User exists but is banned/inactive
                         addToast('error', 'الحساب محظور', 'تم تسجيل خروجك لأن حسابك غير نشط.');
-                        await api.logout();
                     }
+                    // For null profiles or inactive users, sign out to clear auth state
+                    await api.logout();
                     setCurrentUser(null);
-                    // onAuthStateChanged will re-run with firebaseUser=null, which will fetch public data.
+                    await fetchPublicDataOnly();
                 }
             } else {
+                // User is not logged in
                 setCurrentUser(null);
                 await fetchPublicDataOnly();
             }
         } catch (error) {
             console.error("An error occurred during auth state processing:", error);
-            // The specific fetching functions already show toasts, so this is a safeguard.
+            setCurrentUser(null);
+            await fetchPublicDataOnly();
         } finally {
             setIsLoading(false);
         }
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [isProcessingAuth]); // Depend on isProcessingAuth to avoid race conditions.
+  
+    // FIX: Changed dependency array to [] to ensure the listener is set up once and for all users.
+    useEffect(() => {
+        if (!db) return;
+        const settingsDocRef = doc(db, 'site_data', 'settings');
+        const unsubscribe = onSnapshot(settingsDocRef, (docSnap) => {
+            if (docSnap.exists()) {
+                setSiteSettings(docSnap.data() as SiteSettings);
+            } else {
+                setSiteSettings({ logoUrl: '', customFontName: '', customFontBase64: '' });
+            }
+        }, (error) => {
+            console.error("Error listening to site settings:", error);
+        });
+
+        return () => unsubscribe();
+    }, []);
 
 
   useEffect(() => {
@@ -277,38 +285,43 @@ function AppContent() {
     }
   }, [listings, isLoading]);
   
+  // FIX: Reworked to be the source of truth for login state changes, avoiding the auth listener race condition.
   const handleLogin = async (email: string, password: string): Promise<boolean> => {
+    setIsProcessingAuth(true);
     try {
       const user = await api.login(email, password);
-      // The `onAuthStateChanged` listener will handle setting the user and navigating.
       if (user) {
+        setCurrentUser(user);
+        await fetchData(); // Fetch all necessary data for the new session.
         addToast('success', 'أهلاً بعودتك!', `تم تسجيل دخولك بنجاح, ${user.name}.`);
         handleNavigate(Page.Home);
         return true;
       } else {
-        // This case handles wrong credentials from Firebase.
         addToast('error', 'فشل الدخول', 'البريد الإلكتروني أو كلمة المرور غير صحيحة.');
         return false;
       }
     } catch(error: any) {
         if (error.message === 'FIREBASE_NOT_INITIALIZED') {
-            addToast('error', 'فشل تهيئة Firebase', 'لا يمكن الاتصال بالخادم. يرجى التحقق من إعدادات Firebase الخاصة بك.');
+            addToast('error', 'فشل تهيئة Firebase', 'لا يمكن الاتصال بالخادم.');
         } else if (error.message === 'AUTH_USER_BANNED') {
             addToast('error', 'الحساب محظور', 'تم حظر هذا الحساب. يرجى التواصل مع الإدارة.');
         } else {
             addToast('error', 'فشل الدخول', 'البريد الإلكتروني أو كلمة المرور غير صحيحة.');
         }
         return false;
+    } finally {
+        setIsProcessingAuth(false);
     }
   };
 
+  // FIX: Reworked to be the source of truth for registration state changes, avoiding the auth listener race condition.
   const handleRegister = async (newUserData: RegistrationData): Promise<boolean> => {
+    setIsProcessingAuth(true);
     try {
         const user = await api.register(newUserData);
         if(user) {
-            setUsers(prev => [...prev, user]);
-             // onAuthStateChanged will handle setting the user.
             setCurrentUser(user);
+            await fetchData(); // Fetch all data to establish the new user session correctly.
             addToast('success', 'أهلاً بك!', 'تم إنشاء حسابك بنجاح.');
             handleNavigate(Page.Home);
             return true;
@@ -318,16 +331,18 @@ function AppContent() {
         }
     } catch(error: any) {
          if (error.message === 'FIREBASE_NOT_INITIALIZED') {
-            addToast('error', 'فشل تهيئة Firebase', 'لا يمكن الاتصال بالخادم. يرجى التحقق من إعدادات Firebase الخاصة بك.');
+            addToast('error', 'فشل تهيئة Firebase', 'لا يمكن الاتصال بالخادم.');
          } else {
             addToast('error', 'فشل التسجيل', 'حدث خطأ غير متوقع.');
          }
          return false;
+    } finally {
+        setIsProcessingAuth(false);
     }
   };
 
   const handleLogout = () => {
-    api.logout(); // This will trigger onAuthStateChanged, which will set currentUser to null.
+    api.logout(); // This will trigger onAuthStateChanged, which will set currentUser to null and fetch public data.
     handleNavigate(Page.Home);
   };
   
@@ -343,7 +358,8 @@ function AppContent() {
         addToast('info', 'تم استلام عرضك', 'تمت إضافة عرضك بنجاح، وهو الآن قيد المراجعة.');
         handleNavigate(Page.Profile);
       } catch (error) {
-        addToast('error', 'خطأ', 'لم نتمكن من إضافة العرض.');
+        console.error("Add listing error:", error);
+        addToast('error', 'خطأ', 'لم نتمكن من إضافة العرض. قد تكون هناك مشكلة في رفع الصورة.');
       }
   };
   
@@ -417,7 +433,11 @@ function AppContent() {
       if (!currentUser) return;
       await api.performAdminAction(action, payload, currentUser);
       addToast('success', 'تم تنفيذ الإجراء', `تم تنفيذ الإجراء الإداري بنجاح.`);
-      await fetchData(); // Refresh all data to reflect changes
+      // The site settings listener will update settings automatically.
+      // For other actions, we manually refresh all data to ensure consistency.
+      if (action !== 'UPDATE_SITE_SETTINGS') {
+        await fetchData();
+      }
   };
 
   const handleToggleSaveListing = async (listingId: string) => {
