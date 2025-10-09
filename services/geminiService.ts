@@ -8,9 +8,8 @@ function getAiInstance(): GoogleGenAI | null {
     return ai;
   }
   
-  // Use Vite's standard import.meta.env to access environment variables.
-  // FIX: Cast `import.meta` to `any` to bypass TypeScript error when `vite/client` types are not found.
-  const apiKey = (import.meta as any).env.VITE_API_KEY;
+  // Read the Gemini API key from the global __ENV__ object.
+  const apiKey = window.__ENV__?.VITE_API_KEY;
   
   // Check if the API key is present.
   if (apiKey) {

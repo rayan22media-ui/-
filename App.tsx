@@ -58,24 +58,27 @@ const FirebaseErrorOverlay = () => (
         </div>
         <h1 className="text-2xl font-bold text-slate-800 mb-2 text-center">فشل في تهيئة التطبيق</h1>
         <p className="text-slate-600 text-center">
-            تعذر الاتصال بالخدمات الأساسية. قد يكون السبب هو عدم وجود ملف الإعدادات <code>.env</code> أو احتوائه على قيم غير صحيحة.
+            تعذر الاتصال بالخدمات الأساسية. قد يكون السبب هو عدم وجود إعدادات التهيئة الصحيحة.
         </p>
          <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700">
             <p className="font-bold mb-2">للمطورين:</p>
-            <p>يرجى إنشاء ملف باسم <code>.env</code> في المجلد الرئيسي للمشروع ونسخ المحتوى التالي إليه، مع استبدال القيم بقيم مشروع Firebase الخاصة بك، وإضافة مفتاح Gemini API.</p>
+            <p>يرجى تعديل ملف <strong>index.html</strong> مباشرة. ابحث عن وسم <code>&lt;script&gt;</code> الذي يُعرّف <code>window.__ENV__</code> واملأ القيم الفارغة باستخدام إعدادات مشروع Firebase و Gemini API الخاصة بك.</p>
             <pre className="mt-3 p-3 bg-slate-200 text-slate-800 rounded-md text-left overflow-x-auto" dir="ltr">
-                {`# Firebase Configuration
-VITE_FIREBASE_API_KEY="YOUR_API_KEY"
-VITE_FIREBASE_AUTH_DOMAIN="YOUR_AUTH_DOMAIN"
-VITE_FIREBASE_PROJECT_ID="YOUR_PROJECT_ID"
-VITE_FIREBASE_STORAGE_BUCKET="YOUR_STORAGE_BUCKET"
-VITE_FIREBASE_MESSAGING_SENDER_ID="YOUR_SENDER_ID"
-VITE_FIREBASE_APP_ID="YOUR_APP_ID"
+                {`<script>
+  window.__ENV__ = {
+    // Firebase Configuration
+    VITE_FIREBASE_API_KEY: "YOUR_API_KEY",
+    VITE_FIREBASE_AUTH_DOMAIN: "YOUR_AUTH_DOMAIN",
+    VITE_FIREBASE_PROJECT_ID: "YOUR_PROJECT_ID",
+    VITE_FIREBASE_STORAGE_BUCKET: "YOUR_STORAGE_BUCKET",
+    VITE_FIREBASE_MESSAGING_SENDER_ID: "YOUR_SENDER_ID",
+    VITE_FIREBASE_APP_ID: "YOUR_APP_ID",
 
-# Gemini AI Configuration (for suggestions feature)
-VITE_API_KEY="YOUR_GEMINI_API_KEY"`}
+    // Gemini AI Configuration
+    VITE_API_KEY: "YOUR_GEMINI_API_KEY"
+  };
+</script>`}
             </pre>
-            <p className="mt-3 font-semibold">ملاحظة هامة: بعد إضافة أو تعديل ملف <code>.env</code>، يجب إعادة تشغيل خادم التطوير لتطبيق التغييرات.</p>
         </div>
     </div>
   </div>
@@ -216,21 +219,22 @@ function AppContent() {
     }
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
         if (firebaseUser) {
-            const userProfile = await api.getUserProfile(firebaseUser.uid);
-            if (userProfile) {
-                if (userProfile.status === 'active') {
-                    setCurrentUser(userProfile);
-                } else { // Profile exists, but user is banned
-                    addToast('error', 'الحساب محظور', 'تم تسجيل خروجك لأن حسابك غير نشط.');
-                    await api.logout(); // Correctly log out the banned user
+            // Only try to fetch profile if currentUser isn't already set by a direct action
+            if (!currentUser) {
+                const userProfile = await api.getUserProfile(firebaseUser.uid);
+                if (userProfile) {
+                    if (userProfile.status === 'active') {
+                        setCurrentUser(userProfile);
+                    } else {
+                        addToast('error', 'الحساب محظور', 'تم تسجيل خروجك لأن حسابك غير نشط.');
+                        await api.logout();
+                        setCurrentUser(null);
+                    }
+                } else {
+                    // This case is now less likely to happen due to handleRegister/Login taking precedence.
+                    // It can still happen for a user with a valid auth session but a deleted DB record.
                     setCurrentUser(null);
                 }
-            } else {
-                // Profile does NOT exist. This is the race condition case.
-                // DO NOT log the user out. The user might be in the middle of registering.
-                // The handleRegister/handleLogin functions will set the state correctly.
-                // If this is a stale session, not having a profile means they can't do anything anyway.
-                setCurrentUser(null);
             }
         } else {
             setCurrentUser(null);
@@ -238,7 +242,7 @@ function AppContent() {
         setAuthChecked(true);
     });
     return () => unsubscribe();
-  }, [addToast]);
+  }, [addToast, currentUser]);
   
   // --- UI Effects ---
   useEffect(() => {
