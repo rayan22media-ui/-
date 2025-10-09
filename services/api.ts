@@ -42,95 +42,10 @@ const docToType = <T>(docSnap: any): T => {
     return { ...data, id: docSnap.id } as T;
 };
 
-// Fetches all documents from a collection and converts them to a typed array.
-const fetchCollection = async <T>(collectionName: string): Promise<T[]> => {
-    if (!db) return [];
-    const querySnapshot = await getDocs(collection(db, collectionName));
-    return querySnapshot.docs.map(docSnap => docToType<T>(docSnap));
-};
-
 const FIREBASE_INIT_ERROR = 'FIREBASE_NOT_INITIALIZED';
 
 // --- API Service ---
 export const api = {
-    async fetchPublicData() {
-        if (!db) {
-            throw new Error(FIREBASE_INIT_ERROR);
-        }
-
-        // First, fetch listings to determine which user profiles are needed.
-        const listings = await fetchCollection<ListingData>('listings');
-        const userIds = [...new Set(listings.map(l => l.userId).filter(id => id))];
-
-        // Prepare promises for all other public data fetching.
-        const otherDataPromises: Promise<any>[] = [
-            fetchCollection<BlogPost>('blogPosts'),
-            fetchCollection<PageContent>('pages'),
-            getDoc(doc(db, 'site_data', 'categories')).then(d => d.exists() ? d.data().list : INITIAL_CATEGORIES),
-        ];
-        
-        // Batch requests for user profiles, respecting Firestore's 10-item limit for 'in' queries.
-        const userBatchesPromises: Promise<any>[] = [];
-        for (let i = 0; i < userIds.length; i += 10) {
-            const batchIds = userIds.slice(i, i + 10);
-            if (batchIds.length > 0) {
-                const usersQuery = query(collection(db, "users"), where(documentId(), "in", batchIds));
-                userBatchesPromises.push(getDocs(usersQuery));
-            }
-        }
-        
-        // Execute all fetches in parallel.
-        const [blogPosts, pages, categories, ...userQuerySnapshots] = await Promise.all([...otherDataPromises, ...userBatchesPromises]);
-        
-        // Process the user query results.
-        const users: User[] = [];
-        userQuerySnapshots.forEach(snapshot => {
-            snapshot.docs.forEach(docSnap => {
-                if(docSnap.exists()){
-                     users.push(docToType<User>(docSnap));
-                }
-            });
-        });
-
-        return { users, listings, blogPosts, pages, categories };
-    },
-    
-    async fetchAllData(user: User | null) {
-        if (!db) {
-            throw new Error(FIREBASE_INIT_ERROR);
-        }
-        const isUserAdmin = user?.role === 'admin';
-
-        // Base promises that work for everyone or have correct admin rules
-        const promises: Promise<any>[] = [
-            fetchCollection<User>('users'),
-            fetchCollection<ListingData>('listings'),
-            fetchCollection<BlogPost>('blogPosts'),
-            fetchCollection<PageContent>('pages'),
-            getDoc(doc(db, 'site_data', 'categories')).then(d => d.exists() ? d.data().list : INITIAL_CATEGORIES),
-            isUserAdmin ? fetchCollection<Report>('reports') : Promise.resolve([]),
-        ];
-
-        // Fetch messages ONLY for the current logged-in user to avoid permission errors
-        if (user) {
-            const sentQuery = query(collection(db, 'messages'), where('senderId', '==', user.id));
-            const receivedQuery = query(collection(db, 'messages'), where('receiverId', '==', user.id));
-            const messagesPromise = Promise.all([getDocs(sentQuery), getDocs(receivedQuery)]).then(([sentSnap, receivedSnap]) => {
-                const msgs = new Map<string, Message>();
-                sentSnap.forEach(doc => msgs.set(doc.id, docToType<Message>(doc)));
-                receivedSnap.forEach(doc => msgs.set(doc.id, docToType<Message>(doc)));
-                return Array.from(msgs.values());
-            });
-            promises.push(messagesPromise);
-        } else {
-            promises.push(Promise.resolve([])); // No messages for guests
-        }
-
-        const [users, listings, blogPosts, pages, categories, reports, messages] = await Promise.all(promises);
-
-        return { users, listings, messages, reports, blogPosts, pages, categories };
-    },
-
     // --- Auth & Users ---
     async getUserProfile(uid: string): Promise<User | null> {
         if (!db) {
@@ -369,23 +284,6 @@ export const api = {
         });
         const newDoc = await getDoc(docRef);
         return docToType<Message>(newDoc);
-    },
-    
-    async markMessagesAsRead(currentUser: User, partner: User, listing: Listing): Promise<Message[]> {
-        if (!db) throw new Error(FIREBASE_INIT_ERROR);
-        const q = query(
-            collection(db, 'messages'),
-            where('receiverId', '==', currentUser.id),
-            where('senderId', '==', partner.id),
-            where('listingId', '==', listing.id),
-            where('read', '==', false)
-        );
-        const snapshot = await getDocs(q);
-        const updates = snapshot.docs.map(docSnap => updateDoc(doc(db, 'messages', docSnap.id), { read: true }));
-        await Promise.all(updates);
-        
-        // Refetch all messages to return the updated list
-        return this.fetchAllData(currentUser).then(data => data.messages);
     },
 
     // --- Reports ---

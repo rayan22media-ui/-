@@ -1,12 +1,9 @@
+// FIX: Add reference to Vite client types to resolve issues with import.meta.env
+/// <reference types="vite/client" />
 
 import { GoogleGenAI } from "@google/genai";
 
-// Declare the global variable injected by Vite
-declare const __ENV__: {
-  VITE_API_KEY: string;
-};
-
-// Lazy initialization of the AI client to avoid crashing the app if API_key is not set.
+// Lazy initialization of the AI client
 let ai: GoogleGenAI | null = null;
 
 function getAiInstance(): GoogleGenAI | null {
@@ -14,8 +11,8 @@ function getAiInstance(): GoogleGenAI | null {
     return ai;
   }
   
-  // Read the API key from the injected global __ENV__ object.
-  const apiKey = __ENV__.VITE_API_KEY;
+  // Use Vite's standard import.meta.env to access environment variables.
+  const apiKey = import.meta.env.VITE_API_KEY;
   
   // Check if the API key is present.
   if (apiKey) {
@@ -28,7 +25,7 @@ function getAiInstance(): GoogleGenAI | null {
     }
   }
   
-  console.warn("Gemini API key is not configured. The AI suggestion feature will be disabled.");
+  console.warn("Gemini API key (VITE_API_KEY) is not configured in your .env file. AI features will be disabled.");
   return null;
 }
 

@@ -58,23 +58,22 @@ const FirebaseErrorOverlay = () => (
         </div>
         <h1 className="text-2xl font-bold text-slate-800 mb-2 text-center">فشل في تهيئة التطبيق</h1>
         <p className="text-slate-600 text-center">
-            تعذر الاتصال بالخدمات الأساسية، ولا يمكن تشغيل التطبيق حاليًا.
+            تعذر الاتصال بالخدمات الأساسية. قد يكون السبب هو عدم وجود ملف الإعدادات <code>.env</code> أو احتوائه على قيم غير صحيحة.
         </p>
          <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700">
             <p className="font-bold mb-2">للمطورين:</p>
-            <p>لم يتم العثور على إعدادات Firebase. يرجى إنشاء ملف باسم <code>.env</code> في المجلد الرئيسي للمشروع ونسخ المحتوى التالي إليه، مع استبدال قيمة <code>VITE_API_KEY</code> بمفتاح Gemini الخاص بك:</p>
+            <p>يرجى إنشاء ملف باسم <code>.env</code> في المجلد الرئيسي للمشروع ونسخ المحتوى التالي إليه، مع استبدال القيم بقيم مشروع Firebase الخاصة بك، وإضافة مفتاح Gemini API.</p>
             <pre className="mt-3 p-3 bg-slate-200 text-slate-800 rounded-md text-left overflow-x-auto" dir="ltr">
                 {`# Firebase Configuration
-VITE_FIREBASE_API_KEY="AIzaSyCF26ozSFFHs5hzymzCVIZ5c4Hn5l5KSL4"
-VITE_FIREBASE_AUTH_DOMAIN="wino-17628.firebaseapp.com"
-VITE_FIREBASE_PROJECT_ID="wino-17628"
-VITE_FIREBASE_STORAGE_BUCKET="wino-17628.firebasestorage.app"
-VITE_FIREBASE_MESSAGING_SENDER_ID="759405345321"
-VITE_FIREBASE_APP_ID="1:759405345321:web:256de3250b6f7a5ee17a38"
-VITE_FIREBASE_MEASUREMENT_ID="G-4LHQ702W68"
+VITE_FIREBASE_API_KEY="YOUR_API_KEY"
+VITE_FIREBASE_AUTH_DOMAIN="YOUR_AUTH_DOMAIN"
+VITE_FIREBASE_PROJECT_ID="YOUR_PROJECT_ID"
+VITE_FIREBASE_STORAGE_BUCKET="YOUR_STORAGE_BUCKET"
+VITE_FIREBASE_MESSAGING_SENDER_ID="YOUR_SENDER_ID"
+VITE_FIREBASE_APP_ID="YOUR_APP_ID"
 
 # Gemini AI Configuration (for suggestions feature)
-VITE_API_KEY="..."`}
+VITE_API_KEY="YOUR_GEMINI_API_KEY"`}
             </pre>
             <p className="mt-3 font-semibold">ملاحظة هامة: بعد إضافة أو تعديل ملف <code>.env</code>، يجب إعادة تشغيل خادم التطوير لتطبيق التغييرات.</p>
         </div>
@@ -115,6 +114,10 @@ function AppContent() {
   // --- Data Hydration ---
   // This effect runs whenever raw listings or users change, and creates the hydrated 'listings' state.
   useEffect(() => {
+    if (users.length === 0) {
+        setListings([]);
+        return;
+    }
     const usersById = new Map(users.map(u => [u.id, u]));
     const hydratedListings = rawListings
       .map(l => ({
@@ -292,7 +295,7 @@ function AppContent() {
     try {
       const user = await api.login(email, password);
       if (user) {
-        setCurrentUser(user); // Directly set the user state
+        // No need to setCurrentUser, onAuthStateChanged listener will handle it.
         addToast('success', 'أهلاً بعودتك!', `تم تسجيل دخولك بنجاح, ${user.name}.`);
         handleNavigate(Page.Home);
         return true;
@@ -318,7 +321,7 @@ function AppContent() {
     try {
         const newUser = await api.register(newUserData);
         if (newUser) {
-            setCurrentUser(newUser); // Directly set the user state to bypass listener race condition
+            // No need to setCurrentUser, onAuthStateChanged listener will handle it.
             addToast('success', 'أهلاً بك!', 'تم إنشاء حسابك بنجاح.');
             handleNavigate(Page.Home);
             return true;
@@ -370,9 +373,6 @@ function AppContent() {
   };
 
   const handleStartConversation = (partner: User, listing: Listing) => {
-      if (currentUser) {
-         api.markMessagesAsRead(currentUser, partner, listing); // Fire and forget
-      }
       setActiveConversation({ partner, listing });
       handleNavigate(Page.Messages);
   };
@@ -470,7 +470,7 @@ function AppContent() {
   }
 
   const renderPage = () => {
-    if (isLoading) {
+    if (isLoading && !authChecked) { // Show loader only during the very initial auth check
       return <div className="flex justify-center items-center h-[calc(100vh-80px)]"><div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-600"></div></div>;
     }
     const selectedPost = selectedPostId ? blogPosts.find(p => p.id === selectedPostId) : null;
