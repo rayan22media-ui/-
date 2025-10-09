@@ -281,10 +281,7 @@ function AppContent() {
     try {
       const user = await api.login(email, password);
       if (user) {
-        // Directly set the user and fetch their data.
-        setCurrentUser(user);
-        await fetchData(user);
-
+        // The onAuthStateChanged listener will handle setting state and fetching data.
         addToast('success', 'أهلاً بعودتك!', `تم تسجيل دخولك بنجاح, ${user.name}.`);
         handleNavigate(Page.Home);
         return true;
@@ -305,20 +302,25 @@ function AppContent() {
   const handleRegister = async (newUserData: RegistrationData): Promise<boolean> => {
     try {
         const user = await api.register(newUserData);
-        if(user) {
-            // Directly set the user and fetch their data. This avoids the race condition.
-            setCurrentUser(user);
-            await fetchData(user);
-
-            addToast('success', 'أهلاً بك!', 'تم إنشاء حسابك بنجاح.');
-            handleNavigate(Page.Home);
-            return true;
-        } else {
-            addToast('error', 'فشل التسجيل', 'هذا البريد الإلكتروني مسجل بالفعل.');
-            return false;
-        }
+        // The onAuthStateChanged listener will handle setting state and fetching data.
+        addToast('success', 'أهلاً بك!', 'تم إنشاء حسابك بنجاح.');
+        handleNavigate(Page.Home);
+        return true;
     } catch(error: any) {
-         addToast('error', 'فشل التسجيل', 'حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.');
+         let title = 'فشل التسجيل';
+         let message = 'حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.';
+         switch (error.message) {
+             case 'EMAIL_EXISTS':
+                 message = 'هذا البريد الإلكتروني مسجل بالفعل.';
+                 break;
+             case 'WEAK_PASSWORD':
+                 message = 'كلمة المرور ضعيفة جداً. يجب أن تتكون من 6 أحرف على الأقل.';
+                 break;
+             case 'INVALID_EMAIL':
+                 message = 'صيغة البريد الإلكتروني غير صحيحة.';
+                 break;
+         }
+         addToast('error', title, message);
          return false;
     }
   };

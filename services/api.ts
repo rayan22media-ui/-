@@ -194,12 +194,11 @@ export const api = {
         }
     },
 
-    async register(newUserData: RegistrationData): Promise<User | null> {
+    async register(newUserData: RegistrationData): Promise<User> {
         if (!auth || !db || !storage) {
             throw new Error(FIREBASE_INIT_ERROR);
         }
         try {
-            // FIX: Call the imported function directly.
             const userCredential = await createUserWithEmailAndPassword(auth, newUserData.email, newUserData.password!);
             const { uid } = userCredential.user;
             
@@ -224,14 +223,17 @@ export const api = {
             await setDoc(doc(db, 'users', uid), newUser);
             return { ...newUser, id: uid };
         } catch (error: any) {
-            // Only return null for the specific "email in use" error.
-            if (error.code === 'auth/email-already-in-use') {
-                console.warn('Registration failed: email already in use.');
-                return null;
+            console.error("Firebase registration error:", error.code, error.message);
+            switch (error.code) {
+                case 'auth/email-already-in-use':
+                    throw new Error('EMAIL_EXISTS');
+                case 'auth/weak-password':
+                    throw new Error('WEAK_PASSWORD');
+                case 'auth/invalid-email':
+                    throw new Error('INVALID_EMAIL');
+                default:
+                    throw new Error('UNKNOWN_ERROR');
             }
-            // For all other errors, log them and re-throw so the UI can show a generic message.
-            console.error("Firebase registration error:", error);
-            throw error;
         }
     },
     
@@ -239,7 +241,6 @@ export const api = {
         if (!auth) {
             throw new Error(FIREBASE_INIT_ERROR);
         }
-        // FIX: Call the imported function directly.
         await signOut(auth);
     },
 
