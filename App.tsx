@@ -211,28 +211,30 @@ function AppContent() {
   // --- Main Authentication Listener ---
   useEffect(() => {
     if (!auth) {
-        // If Firebase auth isn't available, we can't check.
-        // Mark as checked to unblock the data listener.
         setAuthChecked(true);
         return;
     }
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
         if (firebaseUser) {
             const userProfile = await api.getUserProfile(firebaseUser.uid);
-            if (userProfile && userProfile.status === 'active') {
-                setCurrentUser(userProfile);
-            } else {
-                if (userProfile) {
-                     addToast('error', 'الحساب محظور', 'تم تسجيل خروجك لأن حسابك غير نشط.');
+            if (userProfile) {
+                if (userProfile.status === 'active') {
+                    setCurrentUser(userProfile);
+                } else { // Profile exists, but user is banned
+                    addToast('error', 'الحساب محظور', 'تم تسجيل خروجك لأن حسابك غير نشط.');
+                    await api.logout(); // Correctly log out the banned user
+                    setCurrentUser(null);
                 }
-                await api.logout(); // Triggers this listener again with firebaseUser=null
+            } else {
+                // Profile does NOT exist. This is the race condition case.
+                // DO NOT log the user out. The user might be in the middle of registering.
+                // The handleRegister/handleLogin functions will set the state correctly.
+                // If this is a stale session, not having a profile means they can't do anything anyway.
                 setCurrentUser(null);
             }
         } else {
             setCurrentUser(null);
         }
-        // Signal that the initial authentication check is complete.
-        // This will trigger the data listener effect to run.
         setAuthChecked(true);
     });
     return () => unsubscribe();
@@ -295,7 +297,8 @@ function AppContent() {
     try {
       const user = await api.login(email, password);
       if (user) {
-        // No need to setCurrentUser, onAuthStateChanged listener will handle it.
+        // Directly set the user state to win the race condition against the listener.
+        setCurrentUser(user);
         addToast('success', 'أهلاً بعودتك!', `تم تسجيل دخولك بنجاح, ${user.name}.`);
         handleNavigate(Page.Home);
         return true;
@@ -321,7 +324,8 @@ function AppContent() {
     try {
         const newUser = await api.register(newUserData);
         if (newUser) {
-            // No need to setCurrentUser, onAuthStateChanged listener will handle it.
+            // Directly set the user state to win the race condition against the listener.
+            setCurrentUser(newUser);
             addToast('success', 'أهلاً بك!', 'تم إنشاء حسابك بنجاح.');
             handleNavigate(Page.Home);
             return true;

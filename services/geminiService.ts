@@ -1,6 +1,3 @@
-// FIX: Add reference to Vite client types to resolve issues with import.meta.env
-/// <reference types="vite/client" />
-
 import { GoogleGenAI } from "@google/genai";
 
 // Lazy initialization of the AI client
@@ -12,7 +9,8 @@ function getAiInstance(): GoogleGenAI | null {
   }
   
   // Use Vite's standard import.meta.env to access environment variables.
-  const apiKey = import.meta.env.VITE_API_KEY;
+  // FIX: Cast `import.meta` to `any` to bypass TypeScript error when `vite/client` types are not found.
+  const apiKey = (import.meta as any).env.VITE_API_KEY;
   
   // Check if the API key is present.
   if (apiKey) {

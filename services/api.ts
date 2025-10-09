@@ -1,4 +1,3 @@
-// Import the functions you need from the SDKs you need
 import { User, ListingData, Message, Report, BlogPost, PageContent, RegistrationData, AdminAction, Listing, SiteSettings } from '../types';
 import { INITIAL_CATEGORIES } from '../constants';
 import { auth, db, storage } from '../src/firebaseConfig';
@@ -87,8 +86,8 @@ export const api = {
             const userProfile = await this.getUserProfile(userCredential.user.uid);
     
             if (!userProfile) {
-                await signOut(auth);
-                // Throw a more specific error for the UI to handle
+                // DO NOT SIGN OUT. This was causing a major part of the race condition.
+                // Let the caller handle the failed login state.
                 throw new Error("USER_PROFILE_NOT_FOUND");
             }
     
