@@ -16,6 +16,7 @@ import BlogPostPage from './components/pages/BlogPostPage';
 import ContentPage from './components/pages/ContentPage';
 import ListingsPage from './components/pages/ListingsPage';
 import ListingDetailPage from './components/pages/ListingDetailPage';
+import SavedListingsPage from './components/pages/SavedListingsPage';
 
 function useStickyState<T>(defaultValue: T, key: string): [T, React.Dispatch<React.SetStateAction<T>>] {
   const [value, setValue] = useState<T>(() => {
@@ -419,6 +420,27 @@ function AppContent() {
       await fetchData(); // Refresh all data to reflect changes
   };
 
+  const handleToggleSaveListing = async (listingId: string) => {
+    if (!currentUser) {
+      addToast('warning', 'مطلوب تسجيل الدخول', 'يجب عليك تسجيل الدخول لحفظ العروض.');
+      return;
+    }
+    try {
+      const updatedSavedListings = await api.toggleSaveListing(currentUser.id, listingId);
+      if (updatedSavedListings !== null) {
+        const isNowSaved = updatedSavedListings.includes(listingId);
+        setCurrentUser(prevUser => prevUser ? { ...prevUser, savedListings: updatedSavedListings } : null);
+        addToast(isNowSaved ? 'success' : 'info', isNowSaved ? 'تم الحفظ' : 'تم الإلغاء', isNowSaved ? 'تمت إضافة العرض إلى قائمتك المحفوظة.' : 'تمت إزالة العرض من قائمتك المحفوظة.');
+      }
+    } catch (error) {
+      addToast('error', 'خطأ', 'لم نتمكن من تحديث قائمة الحفظ.');
+    }
+  };
+
+  const isListingSaved = (listingId: string): boolean => {
+    return currentUser?.savedListings?.includes(listingId) ?? false;
+  };
+
   const unreadMessagesCount = currentUser
     ? messages.filter(m => m.receiverId === currentUser.id && !m.read).length
     : 0;
@@ -436,21 +458,22 @@ function AppContent() {
     const selectedCustomPage = selectedPageSlug ? pages.find(p => p.slug === selectedPageSlug && p.status === 'published') : null;
     const selectedListingData = selectedListingId ? listings.find(l => l.id === selectedListingId) : null;
 
-    const mainHomePage = <HomePage listings={listings} blogPosts={blogPosts} onSelectListing={handleSelectListing} onPostSelect={(id) => handleNavigate(Page.BlogPost, { postId: id })} onNavigate={handleNavigate} categories={categories} />;
+    const mainHomePage = <HomePage listings={listings} blogPosts={blogPosts} onSelectListing={handleSelectListing} onPostSelect={(id) => handleNavigate(Page.BlogPost, { postId: id })} onNavigate={handleNavigate} categories={categories} isListingSaved={isListingSaved} onToggleSave={handleToggleSaveListing} />;
     const loginPage = <LoginPage onLogin={handleLogin} onRegister={handleRegister} onNavigateToHome={() => handleNavigate(Page.Home)} />;
 
     switch (currentPage) {
       case Page.Home: return mainHomePage;
       case Page.Login: return loginPage;
-      case Page.Profile: return currentUser ? <ProfilePage currentUser={currentUser} listings={listings} onSelectListing={handleSelectListing} /> : loginPage;
+      case Page.Profile: return currentUser ? <ProfilePage currentUser={currentUser} listings={listings} onSelectListing={handleSelectListing} isListingSaved={isListingSaved} onToggleSave={handleToggleSaveListing} /> : loginPage;
       case Page.AddListing: return currentUser ? <AddListingPage onAddListing={handleAddListing} categories={categories} /> : loginPage;
       case Page.Messages: return currentUser ? <MessagesPage messages={messages} currentUser={currentUser} listings={listings} users={users} activeConversation={activeConversation} onSendMessage={handleSendMessage} onStartConversation={handleStartConversation} onBackToInbox={handleBackToInbox} /> : loginPage;
       case Page.Admin: return currentUser?.role === 'admin' ? <AdminPage users={users} listings={listings} reports={reports} blogPosts={blogPosts} pages={pages} categories={categories} siteSettings={siteSettings} onAdminAction={handleAdminAction} onSelectListing={handleSelectListing} /> : mainHomePage;
-      case Page.Listings: return <ListingsPage listings={listings} onSelectListing={handleSelectListing} categories={categories} />;
+      case Page.Listings: return <ListingsPage listings={listings} onSelectListing={handleSelectListing} categories={categories} isListingSaved={isListingSaved} onToggleSave={handleToggleSaveListing} />;
       case Page.Blog: return <BlogListPage posts={blogPosts} users={users} onPostSelect={(id) => handleNavigate(Page.BlogPost, { postId: id })} />;
       case Page.BlogPost: return selectedPost && author ? <BlogPostPage post={selectedPost} author={author} /> : <BlogListPage posts={blogPosts} users={users} onPostSelect={(id) => handleNavigate(Page.BlogPost, { postId: id })} />;
-      case Page.ContentPage: return selectedCustomPage ? <ContentPage page={selectedCustomPage} onNavigate={handleNavigate} listings={listings} blogPosts={blogPosts} users={users} categories={categories} onSelectListing={handleSelectListing} onPostSelect={(id) => handleNavigate(Page.BlogPost, { postId: id })} /> : mainHomePage;
-      case Page.ListingDetail: return selectedListingData ? <ListingDetailPage listing={selectedListingData} allListings={listings} currentUser={currentUser} onBack={() => window.history.back()} onStartConversation={handleStartConversation} onReportListing={handleReportListing} onSelectUserListing={handleSelectListing} onUpdateStatus={handleUpdateUserListingStatus} onUpdateListing={handleUpdateListing} categories={categories} /> : mainHomePage;
+      case Page.ContentPage: return selectedCustomPage ? <ContentPage page={selectedCustomPage} onNavigate={handleNavigate} listings={listings} blogPosts={blogPosts} users={users} categories={categories} onSelectListing={handleSelectListing} onPostSelect={(id) => handleNavigate(Page.BlogPost, { postId: id })} isListingSaved={isListingSaved} onToggleSave={handleToggleSaveListing} /> : mainHomePage;
+      case Page.ListingDetail: return selectedListingData ? <ListingDetailPage listing={selectedListingData} allListings={listings} currentUser={currentUser} onBack={() => window.history.back()} onStartConversation={handleStartConversation} onReportListing={handleReportListing} onSelectUserListing={handleSelectListing} onUpdateStatus={handleUpdateUserListingStatus} onUpdateListing={handleUpdateListing} categories={categories} isSaved={isListingSaved(selectedListingData.id)} onToggleSave={handleToggleSaveListing} /> : mainHomePage;
+      case Page.SavedListings: return currentUser ? <SavedListingsPage currentUser={currentUser} listings={listings} onSelectListing={handleSelectListing} isListingSaved={isListingSaved} onToggleSave={handleToggleSaveListing} /> : loginPage;
       default: return mainHomePage;
     }
   };

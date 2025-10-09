@@ -7,9 +7,11 @@ interface ListingsPageProps {
   listings: Listing[];
   onSelectListing: (listing: Listing) => void;
   categories: string[];
+  isListingSaved: (listingId: string) => boolean;
+  onToggleSave: (listingId: string) => void;
 }
 
-const ListingsPage: React.FC<ListingsPageProps> = ({ listings, onSelectListing, categories }) => {
+const ListingsPage: React.FC<ListingsPageProps> = ({ listings, onSelectListing, categories, isListingSaved, onToggleSave }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGovernorate, setSelectedGovernorate] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -45,7 +47,13 @@ const ListingsPage: React.FC<ListingsPageProps> = ({ listings, onSelectListing, 
             {filteredListings.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                 {filteredListings.map(listing => (
-                  <ListingCard key={listing.id} listing={listing} onSelect={onSelectListing} />
+                  <ListingCard 
+                    key={listing.id} 
+                    listing={listing} 
+                    onSelect={onSelectListing} 
+                    isSaved={isListingSaved(listing.id)}
+                    onToggleSave={onToggleSave}
+                  />
                 ))}
               </div>
             ) : (

@@ -9,6 +9,7 @@ export interface User {
   governorate: string;
   role: 'user' | 'admin';
   status: 'active' | 'banned';
+  savedListings?: string[];
 }
 
 export type RegistrationData = Omit<User, 'id' | 'role' | 'status'>;
@@ -90,6 +91,7 @@ export enum Page {
   ContentPage = 'ContentPage',
   Listings = 'Listings',
   ListingDetail = 'ListingDetail',
+  SavedListings = 'SavedListings',
 }
 
 export type AdminAction =

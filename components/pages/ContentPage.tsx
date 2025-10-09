@@ -12,9 +12,11 @@ interface ContentPageProps {
   // FIX: Changed postId from number to string to match data type.
   onPostSelect?: (postId: string) => void;
   onNavigate?: (page: Page, params?: any) => void;
+  isListingSaved?: (listingId: string) => boolean;
+  onToggleSave?: (listingId: string) => void;
 }
 
-const ContentPage: React.FC<ContentPageProps> = ({ page, listings, blogPosts, users, categories, onSelectListing, onPostSelect, onNavigate }) => {
+const ContentPage: React.FC<ContentPageProps> = ({ page, listings, blogPosts, users, categories, onSelectListing, onPostSelect, onNavigate, isListingSaved, onToggleSave }) => {
   return (
     <div className="bg-white">
         {page.content && page.content.length > 0 ? (
@@ -28,6 +30,8 @@ const ContentPage: React.FC<ContentPageProps> = ({ page, listings, blogPosts, us
                 onSelectListing={onSelectListing}
                 onPostSelect={onPostSelect}
                 onNavigate={onNavigate}
+                isListingSaved={isListingSaved}
+                onToggleSave={onToggleSave}
             />)
         ) : (
             <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-24 text-center">

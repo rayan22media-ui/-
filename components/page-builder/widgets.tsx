@@ -138,7 +138,7 @@ const ListingListItem: React.FC<{ listing: Listing, onSelect: (listing: Listing)
 
 
 // --- Listings Widget ---
-export const ListingsWidget: React.FC<{ title: string; limit: number; category?: string; layout?: 'grid' | 'list'; listings: Listing[]; onSelectListing: (listing: Listing) => void; onNavigate: (page: Page) => void; }> = ({ title, limit, category, layout = 'grid', listings = [], onSelectListing, onNavigate }) => {
+export const ListingsWidget: React.FC<{ title: string; limit: number; category?: string; layout?: 'grid' | 'list'; listings: Listing[]; onSelectListing: (listing: Listing) => void; onNavigate: (page: Page) => void; isListingSaved: (listingId: string) => boolean; onToggleSave: (listingId: string) => void; }> = ({ title, limit, category, layout = 'grid', listings = [], onSelectListing, onNavigate, isListingSaved, onToggleSave }) => {
 
     const filteredListings = useMemo(() => {
         return listings
@@ -162,7 +162,13 @@ export const ListingsWidget: React.FC<{ title: string; limit: number; category?:
                     ) : (
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
                             {filteredListings.map(listing => (
-                                <ListingCard key={listing.id} listing={listing} onSelect={onSelectListing} />
+                                <ListingCard 
+                                    key={listing.id} 
+                                    listing={listing} 
+                                    onSelect={onSelectListing} 
+                                    isSaved={isListingSaved(listing.id)}
+                                    onToggleSave={onToggleSave}
+                                />
                             ))}
                         </div>
                     )

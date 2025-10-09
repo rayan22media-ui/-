@@ -12,9 +12,11 @@ interface WidgetRendererProps {
   // FIX: Changed postId from number to string to match data type.
   onPostSelect?: (postId: string) => void;
   onNavigate?: (page: Page, params?: any) => void;
+  isListingSaved?: (listingId: string) => boolean;
+  onToggleSave?: (listingId: string) => void;
 }
 
-const WidgetRenderer: React.FC<WidgetRendererProps> = ({ block, listings, blogPosts, users, onSelectListing, onPostSelect, onNavigate }) => {
+const WidgetRenderer: React.FC<WidgetRendererProps> = ({ block, listings, blogPosts, users, onSelectListing, onPostSelect, onNavigate, isListingSaved, onToggleSave }) => {
   switch (block.type) {
     case 'hero':
       return <HeroWidget title={block.props.title} subtitle={block.props.subtitle} imageUrl={block.props.imageUrl} />;
@@ -27,7 +29,7 @@ const WidgetRenderer: React.FC<WidgetRendererProps> = ({ block, listings, blogPo
     case 'slider':
       return <SliderWidget slides={block.props.slides} />;
     case 'listings':
-      if (!listings || !onSelectListing || !onNavigate) return null;
+      if (!listings || !onSelectListing || !onNavigate || !isListingSaved || !onToggleSave) return null;
       return <ListingsWidget
                 title={block.props.title}
                 limit={block.props.limit}
@@ -36,6 +38,8 @@ const WidgetRenderer: React.FC<WidgetRendererProps> = ({ block, listings, blogPo
                 listings={listings}
                 onSelectListing={onSelectListing}
                 onNavigate={onNavigate}
+                isListingSaved={isListingSaved}
+                onToggleSave={onToggleSave}
              />;
     case 'blogPosts':
       if (!blogPosts || !users || !onPostSelect || !onNavigate) return null;

@@ -18,7 +18,9 @@ import {
   Timestamp,
   serverTimestamp,
   orderBy,
-  documentId
+  documentId,
+  arrayUnion,
+  arrayRemove
 } from "firebase/firestore";
 import { 
   ref, 
@@ -184,6 +186,7 @@ export const api = {
                 governorate: newUserData.governorate,
                 role: 'user',
                 status: 'active',
+                savedListings: [],
             };
             
             await setDoc(doc(db, 'users', uid), newUser);
@@ -244,6 +247,37 @@ export const api = {
         return docToType<ListingData>(updatedDoc);
     },
     
+    async toggleSaveListing(userId: string, listingId: string): Promise<string[] | null> {
+        if (!db) throw new Error(FIREBASE_INIT_ERROR);
+        const userRef = doc(db, 'users', userId);
+        try {
+            const userSnap = await getDoc(userRef);
+            if (!userSnap.exists()) {
+                console.error("User not found for saving listing.");
+                return null;
+            }
+            const userData = userSnap.data() as User;
+            const savedListings = userData.savedListings || [];
+
+            if (savedListings.includes(listingId)) {
+                // Unsave: remove from array
+                await updateDoc(userRef, {
+                    savedListings: arrayRemove(listingId)
+                });
+                return savedListings.filter(id => id !== listingId);
+            } else {
+                // Save: add to array
+                await updateDoc(userRef, {
+                    savedListings: arrayUnion(listingId)
+                });
+                return [...savedListings, listingId];
+            }
+        } catch (error) {
+            console.error("Error toggling save listing:", error);
+            return null;
+        }
+    },
+
     // --- Messages ---
     async sendMessage(type: 'text' | 'image' | 'audio', content: string, currentUser: User, activeConversation: { partner: User; listing: Listing }): Promise<Message> {
         if (!db || !storage) throw new Error(FIREBASE_INIT_ERROR);

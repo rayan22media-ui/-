@@ -11,6 +11,8 @@ interface HomePageProps {
   onPostSelect: (postId: string) => void;
   onNavigate: (page: Page) => void;
   categories: string[];
+  isListingSaved: (listingId: string) => boolean;
+  onToggleSave: (listingId: string) => void;
 }
 
 const Hero: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -86,7 +88,7 @@ const RecentBlogPosts: React.FC<{ posts: BlogPost[], onPostSelect: (id: string) 
 };
 
 
-const HomePage: React.FC<HomePageProps> = ({ listings, blogPosts, onSelectListing, onPostSelect, onNavigate, categories }) => {
+const HomePage: React.FC<HomePageProps> = ({ listings, blogPosts, onSelectListing, onPostSelect, onNavigate, categories, isListingSaved, onToggleSave }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGovernorate, setSelectedGovernorate] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -122,7 +124,13 @@ const HomePage: React.FC<HomePageProps> = ({ listings, blogPosts, onSelectListin
         {filteredListings.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {filteredListings.map(listing => (
-              <ListingCard key={listing.id} listing={listing} onSelect={onSelectListing} />
+              <ListingCard 
+                key={listing.id} 
+                listing={listing} 
+                onSelect={onSelectListing} 
+                isSaved={isListingSaved(listing.id)}
+                onToggleSave={onToggleSave}
+              />
             ))}
           </div>
         ) : (

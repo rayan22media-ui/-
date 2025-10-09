@@ -6,9 +6,11 @@ interface ProfilePageProps {
   currentUser: User;
   listings: Listing[];
   onSelectListing: (listing: Listing) => void;
+  isListingSaved: (listingId: string) => boolean;
+  onToggleSave: (listingId: string) => void;
 }
 
-const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, listings, onSelectListing }) => {
+const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, listings, onSelectListing, isListingSaved, onToggleSave }) => {
   const userListings = listings.filter(listing => listing.userId === currentUser.id);
 
   return (
@@ -32,7 +34,13 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, listings, onSele
         {userListings.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {userListings.map(listing => (
-              <ListingCard key={listing.id} listing={listing} onSelect={onSelectListing} />
+              <ListingCard 
+                key={listing.id} 
+                listing={listing} 
+                onSelect={onSelectListing}
+                isSaved={isListingSaved(listing.id)}
+                onToggleSave={onToggleSave}
+              />
             ))}
           </div>
         ) : (
