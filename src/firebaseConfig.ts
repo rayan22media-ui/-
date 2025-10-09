@@ -4,18 +4,16 @@ import { getAuth } from "firebase/auth";
 import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
-// Read environment variables from the global __ENV__ object defined in index.html
-// FIX: Use optional chaining to safely access properties on window.__ENV__ which might be undefined.
-const env = window.__ENV__;
-
+// Per guidelines, environment variables must be sourced from `process.env`.
+// It's assumed the execution environment will provide these variables.
 const firebaseConfig = {
-  apiKey: env?.VITE_FIREBASE_API_KEY,
-  authDomain: env?.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: env?.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: env?.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: env?.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: env?.VITE_FIREBASE_APP_ID,
-  measurementId: env?.VITE_FIREBASE_MEASUREMENT_ID
+  apiKey: process.env.VITE_FIREBASE_API_KEY,
+  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.VITE_FIREBASE_APP_ID,
+  measurementId: process.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 // Initialize Firebase safely
@@ -34,7 +32,7 @@ if (
     !firebaseConfig.messagingSenderId ||
     !firebaseConfig.appId
 ) {
-    console.error("Firebase Initialization Failed: One or more required environment variables are missing. Please check your .env file and ensure it is configured correctly.");
+    console.error("Firebase Initialization Failed: One or more required VITE_FIREBASE_* environment variables are missing. Please ensure they are configured correctly in your deployment environment.");
     firebaseInitializationSuccess = false;
 } else {
     try {

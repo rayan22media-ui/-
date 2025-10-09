@@ -63,23 +63,13 @@ const FirebaseErrorOverlay = () => (
         </p>
          <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700">
             <p className="font-bold mb-2">للمطورين:</p>
-            <p>يرجى تعديل ملف <strong>index.html</strong> مباشرة. ابحث عن وسم <code>&lt;script&gt;</code> الذي يُعرّف <code>window.__ENV__</code> واملأ القيم الفارغة باستخدام إعدادات مشروع Firebase و Gemini API الخاصة بك.</p>
-            <pre className="mt-3 p-3 bg-slate-200 text-slate-800 rounded-md text-left overflow-x-auto" dir="ltr">
-                {`<script>
-  window.__ENV__ = {
-    // Firebase Configuration
-    VITE_FIREBASE_API_KEY: "YOUR_API_KEY",
-    VITE_FIREBASE_AUTH_DOMAIN: "YOUR_AUTH_DOMAIN",
-    VITE_FIREBASE_PROJECT_ID: "YOUR_PROJECT_ID",
-    VITE_FIREBASE_STORAGE_BUCKET: "YOUR_STORAGE_BUCKET",
-    VITE_FIREBASE_MESSAGING_SENDER_ID: "YOUR_SENDER_ID",
-    VITE_FIREBASE_APP_ID: "YOUR_APP_ID",
-
-    // Gemini AI Configuration
-    VITE_API_KEY: "YOUR_GEMINI_API_KEY"
-  };
-</script>`}
-            </pre>
+            <p>
+                يبدو أن متغيرات البيئة (environment variables) المطلوبة مفقودة.
+                يجب توفير متغيرات Firebase (<code>VITE_FIREBASE_*</code>) ومتغير Gemini API (<code>API_KEY</code>) في بيئة التشغيل حتى يعمل التطبيق.
+            </p>
+            <p className="mt-2">
+                يرجى التأكد من تكوين هذه المتغيرات بشكل صحيح في منصة النشر (deployment platform) الخاصة بك.
+            </p>
         </div>
     </div>
   </div>

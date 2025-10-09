@@ -8,8 +8,8 @@ function getAiInstance(): GoogleGenAI | null {
     return ai;
   }
   
-  // Read the Gemini API key from the global __ENV__ object.
-  const apiKey = window.__ENV__?.VITE_API_KEY;
+  // The API key must be obtained exclusively from the environment variable process.env.API_KEY.
+  const apiKey = process.env.API_KEY;
   
   // Check if the API key is present.
   if (apiKey) {
@@ -22,7 +22,7 @@ function getAiInstance(): GoogleGenAI | null {
     }
   }
   
-  console.warn("Gemini API key (VITE_API_KEY) is not configured in your .env file. AI features will be disabled.");
+  console.warn("Gemini API key (API_KEY) is not configured in your environment. AI features will be disabled.");
   return null;
 }
 
