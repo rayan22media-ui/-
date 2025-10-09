@@ -212,29 +212,58 @@ export const api = {
     // --- Listings ---
     async addListing(newListingData: Omit<ListingData, 'id' | 'userId' | 'createdAt' | 'status'>, currentUser: User): Promise<ListingData> {
         if (!db || !storage) throw new Error(FIREBASE_INIT_ERROR);
-        const imageUrls: string[] = [];
+        
+        let finalImageUrl = '';
         if (newListingData.images && newListingData.images[0]?.startsWith('data:image')) {
             const listingImageRef = ref(storage, `listings/${currentUser.id}_${Date.now()}`);
             await uploadString(listingImageRef, newListingData.images[0], 'data_url');
-            imageUrls.push(await getDownloadURL(listingImageRef));
+            finalImageUrl = await getDownloadURL(listingImageRef);
         }
 
-        const docRef = await addDoc(collection(db, 'listings'), {
-            ...newListingData,
-            images: imageUrls,
+        const dataToSave = {
+            title: newListingData.title,
+            description: newListingData.description,
+            category: newListingData.category,
+            governorate: newListingData.governorate,
+            wanted: newListingData.wanted,
+            images: finalImageUrl ? [finalImageUrl] : [],
             userId: currentUser.id,
             createdAt: serverTimestamp(),
-            status: 'pending'
-        });
+            status: 'pending' as const
+        };
 
+        const docRef = await addDoc(collection(db, 'listings'), dataToSave);
         const newDoc = await getDoc(docRef);
         return docToType<ListingData>(newDoc);
     },
     
     async updateListing(listingId: string, updatedData: Omit<ListingData, 'id' | 'userId' | 'createdAt' | 'status'>): Promise<ListingData | null> {
-        if (!db) return null;
+        if (!db || !storage) return null;
         const docRef = doc(db, 'listings', listingId);
-        await updateDoc(docRef, { ...updatedData, status: 'pending' });
+
+        const dataToUpdate: any = {
+            title: updatedData.title,
+            description: updatedData.description,
+            category: updatedData.category,
+            governorate: updatedData.governorate,
+            wanted: updatedData.wanted,
+            status: 'pending' as const
+        };
+        
+        if (updatedData.images && updatedData.images[0] && updatedData.images[0].startsWith('data:image')) {
+            const currentUser = auth?.currentUser;
+            if (!currentUser) throw new Error("User not authenticated for image upload");
+            
+            const listingImageRef = ref(storage, `listings/${currentUser.id}_${Date.now()}`);
+            await uploadString(listingImageRef, updatedData.images[0], 'data_url');
+            const newImageUrl = await getDownloadURL(listingImageRef);
+            dataToUpdate.images = [newImageUrl];
+        } else if (updatedData.images) {
+            dataToUpdate.images = updatedData.images;
+        }
+        
+        await updateDoc(docRef, dataToUpdate);
+        
         const updatedDoc = await getDoc(docRef);
         return docToType<ListingData>(updatedDoc);
     },
