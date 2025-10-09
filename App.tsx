@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Page, User, Listing, Message, Report, BlogPost, PageContent, AdminAction, RegistrationData, ListingData, SiteSettings } from './types';
 import { ToastProvider, useToast } from './components/Toast';
 import { api } from './services/api';
-import { auth, firebaseInitializationSuccess, db } from './src/firebaseConfig'; // Import auth, db, and the new flag
-import { doc, onSnapshot } from "firebase/firestore";
+import { auth, firebaseInitializationSuccess, db } from './src/firebaseConfig';
+import { collection, onSnapshot, doc, query, where, Unsubscribe } from "firebase/firestore";
 
 import Header from './components/Header';
 import HomePage from './components/pages/HomePage';
@@ -52,7 +52,7 @@ const FirebaseErrorOverlay = () => (
   <div className="fixed inset-0 bg-slate-900/80 z-[100] flex items-center justify-center p-4 text-center">
     <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full text-right" dir="rtl">
         <div className="w-16 h-16 mx-auto bg-red-100 rounded-full flex items-center justify-center mb-4">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
         </div>
@@ -88,8 +88,9 @@ function AppContent() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeConversation, setActiveConversation] = useStickyState<{ partner: User; listing: Listing } | null>(null, 'activeConversation');
   
+  // Raw data from Firestore
   const [users, setUsers] = useState<User[]>([]);
-  const [listings, setListings] = useState<Listing[]>([]);
+  const [rawListings, setRawListings] = useState<ListingData[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [blogPosts, setBlogPosts] = useState<BlogPost[]>([]);
@@ -99,6 +100,9 @@ function AppContent() {
   
   const [isLoading, setIsLoading] = useState(true);
   
+  // Derived/Hydrated Data
+  const [listings, setListings] = useState<Listing[]>([]);
+  
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [selectedPageSlug, setSelectedPageSlug] = useState<string | null>(null);
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
@@ -106,124 +110,119 @@ function AppContent() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const { addToast } = useToast();
-
-  const fetchData = async (user: User | null) => {
-    try {
-      const data = await api.fetchAllData(user);
-      
-      const usersById = new Map(data.users.map(u => [u.id, u]));
-      
-      const hydratedListings = data.listings.map(l => ({
-        ...l,
-        user: usersById.get(l.userId) || null,
-      })).filter(l => l.user !== null) as Listing[];
-
-      setUsers(data.users);
-      setListings(hydratedListings);
-      setMessages(data.messages);
-      setReports(data.reports);
-      setBlogPosts(data.blogPosts);
-      setPages(data.pages);
-      setCategories(data.categories);
-    } catch (error: any) {
-      console.error("Failed to fetch data from Firebase:", error);
-      addToast('error', 'خطأ في الاتصال', 'لم نتمكن من جلب البيانات من الخادم.');
-      // Re-throw the error so callers like handleAdminAction can catch it
-      throw error; 
-    }
-  };
   
-  const fetchPublicDataOnly = async () => {
-    try {
-      const data = await api.fetchPublicData();
-      
-      const usersById = new Map(data.users.map(u => [u.id, u]));
-      
-      const hydratedListings = data.listings.map(l => ({
+  // --- Data Hydration ---
+  // This effect runs whenever raw listings or users change, and creates the hydrated 'listings' state.
+  useEffect(() => {
+    const usersById = new Map(users.map(u => [u.id, u]));
+    const hydratedListings = rawListings
+      .map(l => ({
         ...l,
         user: usersById.get(l.userId) || null,
-      })).filter(l => l.user !== null) as Listing[];
+      }))
+      .filter(l => l.user !== null) as Listing[];
+    setListings(hydratedListings);
+  }, [rawListings, users]);
 
-      setUsers(data.users);
-      setListings(hydratedListings);
-      setBlogPosts(data.blogPosts);
-      setPages(data.pages);
-      setCategories(data.categories);
-      
-      setMessages([]);
-      setReports([]);
-
-    } catch (error: any) {
-      console.error("Failed to fetch public data from Firebase:", error);
-      addToast('error', 'خطأ في الاتصال', 'لم نتمكن من جلب البيانات العامة من الخادم.');
-    }
-  };
-
-  // --- Main Authentication Listener ---
-  // This useEffect is the single source of truth for the user's authentication state.
-  // It runs once on mount and listens for changes from Firebase Auth.
+  // --- Real-time Data Listeners ---
   useEffect(() => {
-    if (!firebaseInitializationSuccess || !auth) {
+    if (!db) {
         setIsLoading(false);
         return;
     }
 
+    const listeners: Unsubscribe[] = [];
+    
+    // Generic function to create a listener
+    const createListener = <T,>(collectionName: string, setter: React.Dispatch<React.SetStateAction<T[]>>) => {
+        const q = query(collection(db, collectionName));
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+            const data = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as T[];
+            setter(data);
+        }, (error) => console.error(`Error listening to ${collectionName}:`, error));
+        return unsubscribe;
+    };
+
+    // Listen to public collections always
+    listeners.push(createListener<User>('users', setUsers));
+    listeners.push(createListener<ListingData>('listings', setRawListings));
+    listeners.push(createListener<BlogPost>('blogPosts', setBlogPosts));
+    listeners.push(createListener<PageContent>('pages', setPages));
+
+    // Listen to site_data documents
+    listeners.push(onSnapshot(doc(db, 'site_data', 'settings'), (docSnap) => {
+        if (docSnap.exists()) setSiteSettings(docSnap.data() as SiteSettings);
+    }));
+    listeners.push(onSnapshot(doc(db, 'site_data', 'categories'), (docSnap) => {
+        if (docSnap.exists()) setCategories(docSnap.data().list || []);
+    }));
+
+    // Listen to user-specific or admin-specific collections
+    if (currentUser) {
+        // Messages involving the current user
+        const sentQuery = query(collection(db, 'messages'), where('senderId', '==', currentUser.id));
+        const receivedQuery = query(collection(db, 'messages'), where('receiverId', '==', currentUser.id));
+
+        listeners.push(onSnapshot(sentQuery, (snapshot) => {
+            const sentMessages = snapshot.docs.map(doc => ({...doc.data(), id: doc.id})) as Message[];
+            setMessages(prev => {
+                const otherMessages = prev.filter(m => m.senderId !== currentUser.id);
+                const messageMap = new Map([...otherMessages, ...sentMessages].map(m => [m.id, m]));
+                return Array.from(messageMap.values());
+            });
+        }));
+
+        listeners.push(onSnapshot(receivedQuery, (snapshot) => {
+            const receivedMessages = snapshot.docs.map(doc => ({...doc.data(), id: doc.id})) as Message[];
+             setMessages(prev => {
+                const otherMessages = prev.filter(m => m.receiverId !== currentUser.id);
+                const messageMap = new Map([...otherMessages, ...receivedMessages].map(m => [m.id, m]));
+                return Array.from(messageMap.values());
+            });
+        }));
+
+        // Reports (for admins)
+        if (currentUser.role === 'admin') {
+            listeners.push(createListener<Report>('reports', setReports));
+        }
+    } else {
+        // Clear private data on logout
+        setMessages([]);
+        setReports([]);
+    }
+
+    setIsLoading(false); // Data is now live or empty
+
+    // Cleanup function to unsubscribe from all listeners on component unmount or user change
+    return () => {
+      listeners.forEach(unsubscribe => unsubscribe());
+    };
+  }, [currentUser]); // This whole effect re-runs on login/logout
+
+  // --- Main Authentication Listener ---
+  useEffect(() => {
+    if (!auth) return;
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
         setIsLoading(true);
-        try {
-            if (firebaseUser) {
-                // User is authenticated with Firebase, now get our detailed profile from Firestore.
-                const userProfile = await api.getUserProfile(firebaseUser.uid);
-                
-                if (userProfile && userProfile.status === 'active') {
-                    // User has a profile and is active, set them as the current user and fetch all data.
-                    setCurrentUser(userProfile);
-                    await fetchData(userProfile);
-                } else {
-                    // User either has no profile in Firestore or is banned/inactive.
-                    // Force a logout from Firebase Auth to clear the invalid session.
-                    await api.logout();
-                    // When logout completes, this listener will run again with firebaseUser = null,
-                    // which will correctly set currentUser to null and fetch public data.
-                    
-                    if (userProfile) { // If profile exists, it means they are banned.
-                         addToast('error', 'الحساب محظور', 'تم تسجيل خروجك لأن حسابك غير نشط.');
-                    }
-                }
+        if (firebaseUser) {
+            const userProfile = await api.getUserProfile(firebaseUser.uid);
+            if (userProfile && userProfile.status === 'active') {
+                setCurrentUser(userProfile);
             } else {
-                // User is not logged in.
+                if (userProfile) {
+                     addToast('error', 'الحساب محظور', 'تم تسجيل خروجك لأن حسابك غير نشط.');
+                }
+                await api.logout(); // Triggers this listener again with firebaseUser=null
                 setCurrentUser(null);
-                await fetchPublicDataOnly();
             }
-        } catch (error) {
-            console.error("Error in onAuthStateChanged:", error);
-            // In case of any error, ensure the user is logged out and public data is loaded.
-            setCurrentUser(null);
-            await fetchPublicDataOnly();
-        } finally {
-            setIsLoading(false);
-        }
-    });
-
-    return () => unsubscribe(); // Cleanup the listener on unmount.
-  }, []);
-  
-  // --- Site Settings Listener ---
-  useEffect(() => {
-    if (!db) return;
-    const settingsDocRef = doc(db, 'site_data', 'settings');
-    const unsubscribe = onSnapshot(settingsDocRef, (docSnap) => {
-        if (docSnap.exists()) {
-            setSiteSettings(docSnap.data() as SiteSettings);
         } else {
-            setSiteSettings({ logoUrl: '', customFontName: '', customFontBase64: '' });
+            setCurrentUser(null);
         }
-    }, (error) => {
-        console.error("Error listening to site settings:", error);
+        // Loading is set to false inside the real-time listener effect
     });
     return () => unsubscribe();
-  }, []);
-
+  }, [addToast]);
+  
   // --- UI Effects ---
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 10);
@@ -281,19 +280,23 @@ function AppContent() {
     try {
       const user = await api.login(email, password);
       if (user) {
-        // The onAuthStateChanged listener will handle setting state and fetching data.
+        setCurrentUser(user); // Directly set the user state
         addToast('success', 'أهلاً بعودتك!', `تم تسجيل دخولك بنجاح, ${user.name}.`);
         handleNavigate(Page.Home);
         return true;
       } else {
+        // api.login returns null on auth error like wrong password
         addToast('error', 'فشل الدخول', 'البريد الإلكتروني أو كلمة المرور غير صحيحة.');
         return false;
       }
     } catch(error: any) {
+        // This catch block now primarily handles specific errors thrown by api.login
         if (error.message === 'AUTH_USER_BANNED') {
             addToast('error', 'الحساب محظور', 'تم حظر هذا الحساب. يرجى التواصل مع الإدارة.');
+        } else if (error.message === 'USER_PROFILE_NOT_FOUND') {
+             addToast('error', 'خطأ في الحساب', 'لم يتم العثور على ملفك الشخصي. يرجى محاولة التسجيل مرة أخرى.');
         } else {
-            addToast('error', 'فشل الدخول', 'حدث خطأ غير متوقع.');
+            addToast('error', 'فشل الدخول', 'حدث خطأ غير متوقع أثناء محاولة تسجيل الدخول.');
         }
         return false;
     }
@@ -301,11 +304,15 @@ function AppContent() {
 
   const handleRegister = async (newUserData: RegistrationData): Promise<boolean> => {
     try {
-        const user = await api.register(newUserData);
-        // The onAuthStateChanged listener will handle setting state and fetching data.
-        addToast('success', 'أهلاً بك!', 'تم إنشاء حسابك بنجاح.');
-        handleNavigate(Page.Home);
-        return true;
+        const newUser = await api.register(newUserData);
+        if (newUser) {
+            setCurrentUser(newUser); // Directly set the user state to bypass listener race condition
+            addToast('success', 'أهلاً بك!', 'تم إنشاء حسابك بنجاح.');
+            handleNavigate(Page.Home);
+            return true;
+        }
+        addToast('error', 'فشل التسجيل', 'حدث خطأ غير متوقع.');
+        return false;
     } catch(error: any) {
          let title = 'فشل التسجيل';
          let message = 'حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.';
@@ -336,9 +343,8 @@ function AppContent() {
           return;
       }
       try {
-        const newListing = await api.addListing(newListingData, currentUser);
-        const hydratedListing = { ...newListing, user: currentUser };
-        setListings(prev => [...prev, hydratedListing]);
+        await api.addListing(newListingData, currentUser);
+        // No need to setListings locally, the real-time listener will do it.
         addToast('info', 'تم استلام عرضك', 'تمت إضافة عرضك بنجاح، وهو الآن قيد المراجعة.');
         handleNavigate(Page.Profile);
       } catch (error) {
@@ -351,10 +357,9 @@ function AppContent() {
     handleNavigate(Page.ListingDetail, { listingId: listing.id });
   };
 
-  const handleStartConversation = async (partner: User, listing: Listing) => {
+  const handleStartConversation = (partner: User, listing: Listing) => {
       if (currentUser) {
-         const updatedMessages = await api.markMessagesAsRead(currentUser, partner, listing);
-         setMessages(updatedMessages);
+         api.markMessagesAsRead(currentUser, partner, listing); // Fire and forget
       }
       setActiveConversation({ partner, listing });
       handleNavigate(Page.Messages);
@@ -363,8 +368,8 @@ function AppContent() {
   const handleSendMessage = async (type: 'text' | 'image' | 'audio', content: string) => {
       if (!currentUser || !activeConversation) return;
       try {
-        const newMessage = await api.sendMessage(type, content, currentUser, activeConversation);
-        setMessages(prev => [...prev, newMessage]);
+        await api.sendMessage(type, content, currentUser, activeConversation);
+        // No need to setMessages, listener will catch it.
       } catch(e) {
         addToast('error', 'خطأ', 'لم يتم إرسال الرسالة.');
       }
@@ -378,8 +383,7 @@ function AppContent() {
           return;
       }
       try {
-        const newReport = await api.reportListing(listingId, reason, currentUser);
-        setReports(prev => [...prev, newReport]);
+        await api.reportListing(listingId, reason, currentUser);
         addToast('success', 'تم إرسال البلاغ', 'شكراً لك، تم إرسال بلاغك للإدارة وسنراجعه قريباً.');
       } catch(e) {
          addToast('error', 'خطأ', 'لم نتمكن من إرسال البلاغ.');
@@ -393,8 +397,6 @@ function AppContent() {
     
     const updatedListingData = await api.updateUserListingStatus(listingId, status);
     if(updatedListingData) {
-        const hydratedListing = { ...updatedListingData, user: currentUser };
-        setListings(listings.map(l => l.id === listingId ? hydratedListing : l));
         if (status === 'traded') addToast('success', 'تم التحديث', 'تم تغيير حالة عرضك إلى "تمت المقايضة".');
         else if (status === 'active') addToast('success', 'تم التحديث', 'تم إعادة عرضك وهو الآن نشط.');
     }
@@ -407,8 +409,6 @@ function AppContent() {
 
     const updatedListingData = await api.updateListing(listingId, updatedData);
     if(updatedListingData) {
-        const hydratedListing = { ...updatedListingData, user: currentUser };
-        setListings(listings.map(l => l.id === listingId ? hydratedListing : l));
         addToast('info', 'تم إرسال التعديلات', 'تم حفظ تعديلاتك، وهي الآن قيد المراجعة.');
     }
   };
@@ -419,22 +419,12 @@ function AppContent() {
       return;
     }
     try {
-      // Perform the action first
       await api.performAdminAction(action, payload, currentUser);
-
-      // Then, if it's not a settings update that triggers a real-time listener, refetch all data.
-      // The fetchData function will throw an error if it fails.
-      if (action !== 'UPDATE_SITE_SETTINGS') {
-        await fetchData(currentUser);
-      }
-      
-      // Only show success toast if both the action and the data refetch succeed.
+      // The real-time listeners will update the UI automatically.
       addToast('success', 'تم تنفيذ الإجراء', `تم تنفيذ الإجراء الإداري بنجاح.`);
-
     } catch (error) {
-      // Errors from either performAdminAction or fetchData will be caught here.
-      // fetchData already shows its own generic error toast, so no need to add another.
-      console.error("Failed to perform admin action or refetch data:", error);
+      console.error("Failed to perform admin action:", error);
+      addToast('error', 'خطأ', `فشل تنفيذ الإجراء الإداري.`);
     }
   };
 
@@ -447,7 +437,7 @@ function AppContent() {
       const updatedSavedListings = await api.toggleSaveListing(currentUser.id, listingId);
       if (updatedSavedListings !== null) {
         const isNowSaved = updatedSavedListings.includes(listingId);
-        setCurrentUser(prevUser => prevUser ? { ...prevUser, savedListings: updatedSavedListings } : null);
+        // The user's own profile will be updated by the listener, no need to setCurrentUser here.
         addToast(isNowSaved ? 'success' : 'info', isNowSaved ? 'تم الحفظ' : 'تم الإلغاء', isNowSaved ? 'تمت إضافة العرض إلى قائمتك المحفوظة.' : 'تمت إزالة العرض من قائمتك المحفوظة.');
       }
     } catch (error) {

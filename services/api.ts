@@ -170,26 +170,27 @@ export const api = {
         try {
             const userCredential = await signInWithEmailAndPassword(auth, email, password);
             const userProfile = await this.getUserProfile(userCredential.user.uid);
-
+    
             if (!userProfile) {
-                // This is an inconsistent state where user exists in Auth but not Firestore.
                 await signOut(auth);
-                throw new Error("User profile not found in database.");
+                // Throw a more specific error for the UI to handle
+                throw new Error("USER_PROFILE_NOT_FOUND");
             }
-
+    
             if (userProfile.status !== 'active') {
-                // User is banned or has another inactive status. Sign them out and throw a specific error.
                 await signOut(auth);
                 throw new Error('AUTH_USER_BANNED');
             }
-
-            return userProfile; // Login successful, user is active.
+    
+            return userProfile;
         } catch (error: any) {
-            console.error("Firebase login error:", error);
-            // Re-throw the specific error for the UI to catch, or return null for generic auth errors.
-            if (error.message === 'AUTH_USER_BANNED') {
+            // If it's one of our custom errors, re-throw it.
+            if (error.message === 'AUTH_USER_BANNED' || error.message === 'USER_PROFILE_NOT_FOUND') {
                 throw error;
             }
+            
+            // For any other error (likely from signInWithEmailAndPassword, e.g., wrong password), return null.
+            console.error("Firebase login error:", error.code);
             return null;
         }
     },
