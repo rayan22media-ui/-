@@ -86,6 +86,7 @@ VITE_API_KEY="..."`}
 function AppContent() {
   const [currentPage, setCurrentPage] = useStickyState<Page>(Page.Home, 'currentPage');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [activeConversation, setActiveConversation] = useStickyState<{ partner: User; listing: Listing } | null>(null, 'activeConversation');
   
   // Raw data from Firestore
@@ -126,6 +127,11 @@ function AppContent() {
 
   // --- Real-time Data Listeners ---
   useEffect(() => {
+    // Wait until the initial auth check is complete before setting up listeners.
+    if (!authChecked) {
+        return;
+    }
+
     if (!db) {
         setIsLoading(false);
         return;
@@ -197,13 +203,17 @@ function AppContent() {
     return () => {
       listeners.forEach(unsubscribe => unsubscribe());
     };
-  }, [currentUser]); // This whole effect re-runs on login/logout
+  }, [authChecked, currentUser]); // This whole effect re-runs on login/logout
 
   // --- Main Authentication Listener ---
   useEffect(() => {
-    if (!auth) return;
+    if (!auth) {
+        // If Firebase auth isn't available, we can't check.
+        // Mark as checked to unblock the data listener.
+        setAuthChecked(true);
+        return;
+    }
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
-        setIsLoading(true);
         if (firebaseUser) {
             const userProfile = await api.getUserProfile(firebaseUser.uid);
             if (userProfile && userProfile.status === 'active') {
@@ -218,7 +228,9 @@ function AppContent() {
         } else {
             setCurrentUser(null);
         }
-        // Loading is set to false inside the real-time listener effect
+        // Signal that the initial authentication check is complete.
+        // This will trigger the data listener effect to run.
+        setAuthChecked(true);
     });
     return () => unsubscribe();
   }, [addToast]);
