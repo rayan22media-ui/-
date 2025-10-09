@@ -86,9 +86,8 @@ export const api = {
             const userProfile = await this.getUserProfile(userCredential.user.uid);
     
             if (!userProfile) {
-                // DO NOT SIGN OUT. This was causing a major part of the race condition.
-                // Let the caller handle the failed login state.
-                throw new Error("USER_PROFILE_NOT_FOUND");
+                // Throw a specific error with the UID to allow for profile completion.
+                throw new Error(`USER_PROFILE_NOT_FOUND:${userCredential.user.uid}`);
             }
     
             if (userProfile.status !== 'active') {
@@ -99,7 +98,7 @@ export const api = {
             return userProfile;
         } catch (error: any) {
             // If it's one of our custom errors, re-throw it.
-            if (error.message === 'AUTH_USER_BANNED' || error.message === 'USER_PROFILE_NOT_FOUND') {
+            if (error.message.startsWith('USER_PROFILE_NOT_FOUND:') || error.message === 'AUTH_USER_BANNED') {
                 throw error;
             }
             
@@ -152,6 +151,37 @@ export const api = {
         }
     },
     
+    async createUserProfile(uid: string, profileData: Omit<RegistrationData, 'password'>): Promise<User> {
+        if (!db || !storage) {
+            throw new Error(FIREBASE_INIT_ERROR);
+        }
+        try {
+            let avatarUrl = `https://picsum.photos/seed/${profileData.email}/200/200`;
+            if(profileData.avatarUrl && profileData.avatarUrl.startsWith('data:image')) {
+                const storageRef = ref(storage, `avatars/${uid}`);
+                await uploadString(storageRef, profileData.avatarUrl, 'data_url');
+                avatarUrl = await getDownloadURL(storageRef);
+            }
+
+            const newUser: Omit<User, 'id'> = {
+                name: profileData.name,
+                email: profileData.email,
+                phone: profileData.phone,
+                avatarUrl: avatarUrl,
+                governorate: profileData.governorate,
+                role: 'user',
+                status: 'active',
+                savedListings: [],
+            };
+            
+            await setDoc(doc(db, 'users', uid), newUser);
+            return { ...newUser, id: uid };
+        } catch (error) {
+            console.error("Error creating user profile document:", error);
+            throw new Error('PROFILE_CREATION_FAILED');
+        }
+    },
+
     async logout(): Promise<void> {
         if (!auth) {
             throw new Error(FIREBASE_INIT_ERROR);

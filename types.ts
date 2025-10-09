@@ -107,6 +107,7 @@ export enum Page {
   Listings = 'Listings',
   ListingDetail = 'ListingDetail',
   SavedListings = 'SavedListings',
+  CompleteProfile = 'CompleteProfile',
 }
 
 export type AdminAction =

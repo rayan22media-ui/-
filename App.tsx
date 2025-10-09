@@ -18,6 +18,7 @@ import ContentPage from './components/pages/ContentPage';
 import ListingsPage from './components/pages/ListingsPage';
 import ListingDetailPage from './components/pages/ListingDetailPage';
 import SavedListingsPage from './components/pages/SavedListingsPage';
+import CompleteProfilePage from './components/pages/CompleteProfilePage';
 
 function useStickyState<T>(defaultValue: T, key: string): [T, React.Dispatch<React.SetStateAction<T>>] {
   const [value, setValue] = useState<T>(() => {
@@ -91,6 +92,9 @@ function AppContent() {
   const [authChecked, setAuthChecked] = useState(false);
   const [activeConversation, setActiveConversation] = useStickyState<{ partner: User; listing: Listing } | null>(null, 'activeConversation');
   
+  // State for handling orphaned auth users
+  const [userToCompleteProfile, setUserToCompleteProfile] = useState<{uid: string, email: string} | null>(null);
+
   // Raw data from Firestore
   const [users, setUsers] = useState<User[]>([]);
   const [rawListings, setRawListings] = useState<ListingData[]>([]);
@@ -272,6 +276,7 @@ function AppContent() {
   // --- Navigation & Page Load ---
   const handleNavigate = (page: Page, params?: { postId?: string; slug?: string; listingId?: string }) => {
     if (page !== Page.Messages) setActiveConversation(null);
+    if (page !== Page.CompleteProfile) setUserToCompleteProfile(null);
     setSelectedPostId(null);
     setSelectedPageSlug(null);
     setSelectedListingId(null);
@@ -312,9 +317,17 @@ function AppContent() {
         return false;
       }
     } catch(error: any) {
-        // This catch block now primarily handles specific errors thrown by api.login
         if (error.message === 'AUTH_USER_BANNED') {
             addToast('error', 'الحساب محظور', 'تم حظر هذا الحساب. يرجى التواصل مع الإدارة.');
+        } else if (error.message && error.message.startsWith('USER_PROFILE_NOT_FOUND:')) {
+             const uid = error.message.split(':')[1];
+             if (uid) {
+                 addToast('info', 'إكمال الملف الشخصي', 'يبدو أن ملفك الشخصي غير مكتمل. يرجى إكمال بياناتك للمتابعة.');
+                 setUserToCompleteProfile({ uid, email });
+                 handleNavigate(Page.CompleteProfile);
+             } else {
+                 addToast('error', 'خطأ في الحساب', 'لم يتم العثور على ملفك الشخصي. يرجى التواصل مع الدعم الفني.');
+             }
         } else if (error.message === 'USER_PROFILE_NOT_FOUND') {
              addToast('error', 'خطأ في الحساب', 'لم يتم العثور على ملفك الشخصي. يرجى محاولة التسجيل مرة أخرى.');
         } else {
@@ -352,6 +365,26 @@ function AppContent() {
          }
          addToast('error', title, message);
          return false;
+    }
+  };
+  
+  const handleCompleteProfile = async (profileData: Omit<RegistrationData, 'password' | 'email'>): Promise<boolean> => {
+    if (!userToCompleteProfile) return false;
+
+    try {
+        const fullProfileData = { ...profileData, email: userToCompleteProfile.email };
+        const newUser = await api.createUserProfile(userToCompleteProfile.uid, fullProfileData);
+        if (newUser) {
+            setCurrentUser(newUser);
+            addToast('success', 'أهلاً بك!', 'تم إكمال ملفك الشخصي بنجاح.');
+            setUserToCompleteProfile(null);
+            handleNavigate(Page.Home);
+            return true;
+        }
+        return false;
+    } catch (error) {
+        addToast('error', 'فشل', 'لم نتمكن من حفظ ملفك الشخصي. يرجى المحاولة مرة أخرى.');
+        return false;
     }
   };
 
@@ -502,6 +535,7 @@ function AppContent() {
       case Page.ContentPage: return selectedCustomPage ? <ContentPage page={selectedCustomPage} onNavigate={handleNavigate} listings={listings} blogPosts={blogPosts} users={users} categories={categories} onSelectListing={handleSelectListing} onPostSelect={(id) => handleNavigate(Page.BlogPost, { postId: id })} isListingSaved={isListingSaved} onToggleSave={handleToggleSaveListing} /> : mainHomePage;
       case Page.ListingDetail: return selectedListingData ? <ListingDetailPage listing={selectedListingData} allListings={listings} currentUser={currentUser} onBack={() => window.history.back()} onStartConversation={handleStartConversation} onReportListing={handleReportListing} onSelectUserListing={handleSelectListing} onUpdateStatus={handleUpdateUserListingStatus} onUpdateListing={handleUpdateListing} categories={categories} isSaved={isListingSaved(selectedListingData.id)} onToggleSave={handleToggleSaveListing} /> : mainHomePage;
       case Page.SavedListings: return currentUser ? <SavedListingsPage currentUser={currentUser} listings={listings} onSelectListing={handleSelectListing} isListingSaved={isListingSaved} onToggleSave={handleToggleSaveListing} /> : loginPage;
+      case Page.CompleteProfile: return userToCompleteProfile ? <CompleteProfilePage email={userToCompleteProfile.email} onCompleteProfile={handleCompleteProfile} /> : loginPage;
       default: return mainHomePage;
     }
   };
