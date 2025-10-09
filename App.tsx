@@ -64,11 +64,7 @@ const FirebaseErrorOverlay = () => (
          <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700">
             <p className="font-bold mb-2">للمطورين:</p>
             <p>
-                يبدو أن متغيرات البيئة (environment variables) المطلوبة مفقودة.
-                يجب توفير متغيرات Firebase (<code>VITE_FIREBASE_*</code>) ومتغير Gemini API (<code>API_KEY</code>) في بيئة التشغيل حتى يعمل التطبيق.
-            </p>
-            <p className="mt-2">
-                يرجى التأكد من تكوين هذه المتغيرات بشكل صحيح في منصة النشر (deployment platform) الخاصة بك.
+                يرجى تعديل ملف <strong>index.html</strong> مباشرة. ابحث عن وسم &lt;script&gt; الذي يُعرّف <code>window.__ENV__</code> واملأ القيم الفارغة باستخدام إعدادات مشروع Firebase و Gemini API الخاصة بك.
             </p>
         </div>
     </div>

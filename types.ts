@@ -114,3 +114,12 @@ export interface SiteSettings {
   customFontName?: string;
   customFontBase64?: string;
 }
+
+// Allow TypeScript to recognize the __ENV__ object on the window
+declare global {
+  interface Window {
+    __ENV__: {
+      [key: string]: string;
+    };
+  }
+}

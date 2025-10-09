@@ -8,11 +8,11 @@ function getAiInstance(): GoogleGenAI | null {
     return ai;
   }
   
-  // The API key must be obtained exclusively from the environment variable process.env.API_KEY.
-  const apiKey = process.env.API_KEY;
+  // The API key is obtained from the window.__ENV__ object configured in index.html.
+  const apiKey = window.__ENV__?.API_KEY;
   
-  // Check if the API key is present.
-  if (apiKey) {
+  // Check if the API key is present and not a placeholder.
+  if (apiKey && apiKey !== "YOUR_GEMINI_API_KEY") {
     try {
       ai = new GoogleGenAI({ apiKey });
       return ai;
@@ -22,7 +22,7 @@ function getAiInstance(): GoogleGenAI | null {
     }
   }
   
-  console.warn("Gemini API key (API_KEY) is not configured in your environment. AI features will be disabled.");
+  console.warn("Gemini API key (API_KEY) is not configured in your index.html. AI features will be disabled.");
   return null;
 }
 
