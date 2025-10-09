@@ -224,12 +224,14 @@ export const api = {
             await setDoc(doc(db, 'users', uid), newUser);
             return { ...newUser, id: uid };
         } catch (error: any) {
+            // Only return null for the specific "email in use" error.
             if (error.code === 'auth/email-already-in-use') {
                 console.warn('Registration failed: email already in use.');
-            } else {
-                console.error("Firebase registration error:", error);
+                return null;
             }
-            return null;
+            // For all other errors, log them and re-throw so the UI can show a generic message.
+            console.error("Firebase registration error:", error);
+            throw error;
         }
     },
     

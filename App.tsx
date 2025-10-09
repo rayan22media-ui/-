@@ -281,7 +281,10 @@ function AppContent() {
     try {
       const user = await api.login(email, password);
       if (user) {
-        // The onAuthStateChanged listener will handle setting state and fetching data.
+        // Directly set the user and fetch their data.
+        setCurrentUser(user);
+        await fetchData(user);
+
         addToast('success', 'أهلاً بعودتك!', `تم تسجيل دخولك بنجاح, ${user.name}.`);
         handleNavigate(Page.Home);
         return true;
@@ -303,7 +306,10 @@ function AppContent() {
     try {
         const user = await api.register(newUserData);
         if(user) {
-            // The onAuthStateChanged listener will handle setting state and fetching data.
+            // Directly set the user and fetch their data. This avoids the race condition.
+            setCurrentUser(user);
+            await fetchData(user);
+
             addToast('success', 'أهلاً بك!', 'تم إنشاء حسابك بنجاح.');
             handleNavigate(Page.Home);
             return true;
@@ -312,7 +318,7 @@ function AppContent() {
             return false;
         }
     } catch(error: any) {
-         addToast('error', 'فشل التسجيل', 'حدث خطأ غير متوقع.');
+         addToast('error', 'فشل التسجيل', 'حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.');
          return false;
     }
   };
