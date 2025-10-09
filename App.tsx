@@ -319,17 +319,17 @@ function AppContent() {
     } catch(error: any) {
         if (error.message === 'AUTH_USER_BANNED') {
             addToast('error', 'الحساب محظور', 'تم حظر هذا الحساب. يرجى التواصل مع الإدارة.');
-        } else if (error.message && error.message.startsWith('USER_PROFILE_NOT_FOUND:')) {
-             const uid = error.message.split(':')[1];
+        } else if (error.message && error.message.startsWith('USER_PROFILE_NOT_FOUND')) {
+             const parts = error.message.split(':');
+             const uid = parts.length > 1 ? parts[1] : null;
+
              if (uid) {
                  addToast('info', 'إكمال الملف الشخصي', 'يبدو أن ملفك الشخصي غير مكتمل. يرجى إكمال بياناتك للمتابعة.');
                  setUserToCompleteProfile({ uid, email });
                  handleNavigate(Page.CompleteProfile);
              } else {
-                 addToast('error', 'خطأ في الحساب', 'لم يتم العثور على ملفك الشخصي. يرجى التواصل مع الدعم الفني.');
+                 addToast('error', 'خطأ في الحساب', 'لم يتم العثور على ملفك الشخصي. يرجى محاولة التسجيل مرة أخرى.');
              }
-        } else if (error.message === 'USER_PROFILE_NOT_FOUND') {
-             addToast('error', 'خطأ في الحساب', 'لم يتم العثور على ملفك الشخصي. يرجى محاولة التسجيل مرة أخرى.');
         } else {
             addToast('error', 'فشل الدخول', 'حدث خطأ غير متوقع أثناء محاولة تسجيل الدخول.');
         }
