@@ -95,20 +95,39 @@ export const api = {
         return { users, listings, blogPosts, pages, categories };
     },
     
-    async fetchAllData() {
+    async fetchAllData(user: User | null) {
         if (!db) {
             throw new Error(FIREBASE_INIT_ERROR);
         }
-        // Fetch all data collections in parallel for efficiency.
-        const [users, listings, messages, reports, blogPosts, pages, categories] = await Promise.all([
+        const isUserAdmin = user?.role === 'admin';
+
+        // Base promises that work for everyone or have correct admin rules
+        const promises: Promise<any>[] = [
             fetchCollection<User>('users'),
             fetchCollection<ListingData>('listings'),
-            fetchCollection<Message>('messages'),
-            fetchCollection<Report>('reports'),
             fetchCollection<BlogPost>('blogPosts'),
             fetchCollection<PageContent>('pages'),
             getDoc(doc(db, 'site_data', 'categories')).then(d => d.exists() ? d.data().list : INITIAL_CATEGORIES),
-        ]);
+            isUserAdmin ? fetchCollection<Report>('reports') : Promise.resolve([]),
+        ];
+
+        // Fetch messages ONLY for the current logged-in user to avoid permission errors
+        if (user) {
+            const sentQuery = query(collection(db, 'messages'), where('senderId', '==', user.id));
+            const receivedQuery = query(collection(db, 'messages'), where('receiverId', '==', user.id));
+            const messagesPromise = Promise.all([getDocs(sentQuery), getDocs(receivedQuery)]).then(([sentSnap, receivedSnap]) => {
+                const msgs = new Map<string, Message>();
+                sentSnap.forEach(doc => msgs.set(doc.id, docToType<Message>(doc)));
+                receivedSnap.forEach(doc => msgs.set(doc.id, docToType<Message>(doc)));
+                return Array.from(msgs.values());
+            });
+            promises.push(messagesPromise);
+        } else {
+            promises.push(Promise.resolve([])); // No messages for guests
+        }
+
+        const [users, listings, blogPosts, pages, categories, reports, messages] = await Promise.all(promises);
+
         return { users, listings, messages, reports, blogPosts, pages, categories };
     },
 
@@ -117,16 +136,31 @@ export const api = {
         if (!db) {
             throw new Error(FIREBASE_INIT_ERROR);
         }
-        try {
-            const userDoc = await getDoc(doc(db, 'users', uid));
-            if (userDoc.exists()) {
-                return docToType<User>(userDoc);
+
+        // Retry logic to handle the race condition between Firebase Auth user creation
+        // and the corresponding Firestore document creation. This is a critical fix.
+        const retries = 3;
+        const initialDelay = 400; // ms
+
+        for (let i = 0; i < retries; i++) {
+            try {
+                const userDoc = await getDoc(doc(db, 'users', uid));
+                if (userDoc.exists()) {
+                    return docToType<User>(userDoc);
+                }
+                // If the document doesn't exist, wait before the next attempt.
+                if (i < retries - 1) {
+                    await new Promise(res => setTimeout(res, initialDelay * (i + 1)));
+                }
+            } catch (error) {
+                console.error(`Error fetching user profile (attempt ${i + 1}):`, error);
+                // If there's an actual error (e.g., permissions), stop retrying.
+                return null;
             }
-            return null;
-        } catch (error) {
-            console.error("Error fetching user profile:", error);
-            return null;
         }
+        
+        console.warn(`User profile for UID ${uid} could not be found after ${retries} attempts. This can happen if the registration process is interrupted.`);
+        return null;
     },
 
     async login(email: string, password: string): Promise<User | null> {
@@ -347,7 +381,7 @@ export const api = {
         await Promise.all(updates);
         
         // Refetch all messages to return the updated list
-        return fetchCollection<Message>('messages');
+        return this.fetchAllData(currentUser).then(data => data.messages);
     },
 
     // --- Reports ---

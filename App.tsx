@@ -107,9 +107,9 @@ function AppContent() {
   const [isScrolled, setIsScrolled] = useState(false);
   const { addToast } = useToast();
 
-  const fetchData = async () => {
+  const fetchData = async (user: User | null) => {
     try {
-      const data = await api.fetchAllData();
+      const data = await api.fetchAllData(user);
       
       const usersById = new Map(data.users.map(u => [u.id, u]));
       
@@ -128,6 +128,8 @@ function AppContent() {
     } catch (error: any) {
       console.error("Failed to fetch data from Firebase:", error);
       addToast('error', 'خطأ في الاتصال', 'لم نتمكن من جلب البيانات من الخادم.');
+      // Re-throw the error so callers like handleAdminAction can catch it
+      throw error; 
     }
   };
   
@@ -176,7 +178,7 @@ function AppContent() {
                 if (userProfile && userProfile.status === 'active') {
                     // User has a profile and is active, set them as the current user and fetch all data.
                     setCurrentUser(userProfile);
-                    await fetchData();
+                    await fetchData(userProfile);
                 } else {
                     // User either has no profile in Firestore or is banned/inactive.
                     // Force a logout from Firebase Auth to clear the invalid session.
@@ -404,12 +406,28 @@ function AppContent() {
   };
 
   const handleAdminAction = async (action: AdminAction, payload: any) => {
-      if (!currentUser) return;
+    if (!currentUser || currentUser.role !== 'admin') {
+      addToast('error', 'غير مصرح به', 'ليس لديك صلاحيات للقيام بهذا الإجراء.');
+      return;
+    }
+    try {
+      // Perform the action first
       await api.performAdminAction(action, payload, currentUser);
-      addToast('success', 'تم تنفيذ الإجراء', `تم تنفيذ الإجراء الإداري بنجاح.`);
+
+      // Then, if it's not a settings update that triggers a real-time listener, refetch all data.
+      // The fetchData function will throw an error if it fails.
       if (action !== 'UPDATE_SITE_SETTINGS') {
-        await fetchData(); // Refresh data for consistency after most actions
+        await fetchData(currentUser);
       }
+      
+      // Only show success toast if both the action and the data refetch succeed.
+      addToast('success', 'تم تنفيذ الإجراء', `تم تنفيذ الإجراء الإداري بنجاح.`);
+
+    } catch (error) {
+      // Errors from either performAdminAction or fetchData will be caught here.
+      // fetchData already shows its own generic error toast, so no need to add another.
+      console.error("Failed to perform admin action or refetch data:", error);
+    }
   };
 
   const handleToggleSaveListing = async (listingId: string) => {
